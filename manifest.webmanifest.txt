@@ -1,5 +1,5 @@
 {
-  "name": "DMYC Cotizaciones",
+  "name": "DMYC Cotizaciones (Local)",
   "short_name": "Cotizaciones",
   "start_url": "./index.html",
   "display": "standalone",
