@@ -1,13 +1,12 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>DMYC · Cotizaciones (Local)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DMYC Cotizaciones</title>
 
-  <link rel="icon" href="data:,">
-  <link rel="manifest" href="./manifest.webmanifest">
-  <meta name="theme-color" content="#0b4aa2">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0b4aa2" />
 
   <!-- PDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
@@ -17,52 +16,48 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
   <style>
-    :root{ --b:#0b4aa2; --g:#f3f5f7; --txt:#1f2937; }
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:0; color:var(--txt); background:var(--g);}
-    header{background:var(--b); color:#fff; padding:14px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between;}
-    header .right{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
-    main{max-width:1100px; margin:16px auto; padding:0 12px;}
-    .card{background:#fff; border-radius:10px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.06); margin-bottom:12px;}
-    .grid{display:grid; gap:10px;}
-    .grid2{grid-template-columns:1fr 1fr;}
-    .grid3{grid-template-columns:1fr 1fr 1fr;}
-    label{font-size:12px; color:#475569;}
-    input,select,textarea{width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px;}
-    textarea{min-height:80px;}
-    table{width:100%; border-collapse:collapse;}
-    th,td{border-bottom:1px solid #e5e7eb; padding:10px; text-align:left; font-size:14px; vertical-align:top;}
-    th{background:#f8fafc; font-size:12px; color:#475569; text-transform:uppercase; letter-spacing:.04em;}
-    .btn{border:0; padding:10px 12px; border-radius:8px; cursor:pointer; font-weight:600;}
-    .btnP{background:var(--b); color:#fff;}
-    .btnS{background:#111827; color:#fff;}
-    .btnG{background:#16a34a; color:#fff;}
-    .btnW{background:#f59e0b; color:#111827;}
-    .btnD{background:#ef4444; color:#fff;}
-    .row{display:flex; gap:8px; flex-wrap:wrap;}
-    .muted{color:#64748b; font-size:12px;}
-    .kpi{display:flex; gap:12px; flex-wrap:wrap;}
-    .pill{background:#eef2ff; color:#3730a3; padding:6px 10px; border-radius:999px; font-weight:700; font-size:12px;}
-    .rightAlign{text-align:right;}
-
-    /* Tabla sin sobreposición */
-    .tableWrap{width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;}
-    .wideTable{min-width:1200px;}
-    .wideTable input,.wideTable select{width:100%; min-width:0; box-sizing:border-box;}
-    .wideTable th:nth-child(3), .wideTable td:nth-child(3){min-width:320px;}
-
-    @media (max-width:900px){ .grid2,.grid3{grid-template-columns:1fr;} header{flex-direction:column; align-items:flex-start;} }
+    :root{--b:#0b4aa2;--g:#f3f5f7;--txt:#1f2937}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;color:var(--txt);background:var(--g)}
+    header{background:var(--b);color:#fff;padding:14px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+    header .right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    main{max-width:1100px;margin:16px auto;padding:0 12px}
+    .card{background:#fff;border-radius:10px;padding:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:12px}
+    .grid{display:grid;gap:10px}
+    .grid2{grid-template-columns:1fr 1fr}
+    .grid3{grid-template-columns:1fr 1fr 1fr}
+    label{font-size:12px;color:#475569}
+    input,select,textarea{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box}
+    textarea{min-height:80px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left;font-size:14px;vertical-align:top}
+    th{background:#f8fafc;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:.04em}
+    .btn{border:0;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+    .btnP{background:var(--b);color:#fff}
+    .btnS{background:#111827;color:#fff}
+    .btnG{background:#16a34a;color:#fff}
+    .btnW{background:#f59e0b;color:#111827}
+    .btnD{background:#ef4444;color:#fff}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    .muted{color:#64748b;font-size:12px}
+    .kpi{display:flex;gap:12px;flex-wrap:wrap}
+    .pill{background:#eef2ff;color:#3730a3;padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px}
+    .rightAlign{text-align:right}
+    .tableWrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .wideTable{min-width:1200px}
+    .wideTable input,.wideTable select{width:100%;min-width:0}
+    @media (max-width:900px){.grid2,.grid3{grid-template-columns:1fr}header{flex-direction:column;align-items:flex-start}}
   </style>
 </head>
 
 <body>
 <header>
   <div>
-    <div style="font-weight:800; letter-spacing:.02em;">DMYC · Cotizaciones (Local)</div>
+    <div style="font-weight:800;letter-spacing:.02em">DMYC Cotizaciones</div>
     <div class="muted" id="statusLine">Cargando...</div>
   </div>
 
   <div class="right">
-    <button class="btn btnS" id="btnInstall" style="display:none;" type="button">Instalar</button>
+    <button class="btn btnS" id="btnInstall" style="display:none" type="button">Instalar</button>
     <button class="btn btnS" id="btnExportDB" type="button">Exportar BD (Excel+JSON)</button>
     <button class="btn btnW" id="btnImportDB" type="button">Importar BD (JSON)</button>
   </div>
@@ -71,7 +66,7 @@
 <main>
   <div class="card">
     <div class="kpi">
-      <span class="pill" id="pillQuoteNo">COT-0001-XXXX</span>
+      <span class="pill" id="pillQuoteNo">COT-0401-XXXX</span>
       <span class="pill" id="pillCurrency">Moneda: CLP</span>
       <span class="pill" id="pillIva">IVA: 19%</span>
       <span class="pill" id="pillEditing">Modo: Nueva</span>
@@ -88,8 +83,8 @@
         </select>
       </div>
       <div>
-        <label>Dólar del día (referencia)</label>
-        <input id="usdRate" type="number" step="0.01" value="950">
+        <label>Dólar del día referencial</label>
+        <input id="usdRate" type="number" step="0.01" value="950" />
       </div>
       <div>
         <label>Estado</label>
@@ -101,41 +96,45 @@
       </div>
     </div>
 
-    <div class="grid grid3">
-      <div><label>Fecha cotización</label><input id="quoteDate" type="date"></div>
-      <div><label>Válida hasta</label><input id="validUntil" type="date"></div>
-      <div><label>Próximo contacto</label><input id="nextContact" type="date"></div>
+    <div style="margin-top:10px" class="grid grid3">
+      <div><label>Fecha cotización</label><input id="quoteDate" type="date" /></div>
+      <div><label>Válida hasta</label><input id="validUntil" type="date" /></div>
+      <div><label>Próximo contacto</label><input id="nextContact" type="date" /></div>
     </div>
 
-    <div class="grid grid2">
-      <div><label>Cliente (nombre)</label><input id="clientName" placeholder="Ej: Misael"></div>
-      <div><label>Empresa</label><input id="clientCompany" placeholder="Ej: Constructora X"></div>
+    <div style="margin-top:10px" class="grid grid2">
+      <div><label>Cliente nombre</label><input id="clientName" placeholder="Ej: Misael" /></div>
+      <div><label>Empresa</label><input id="clientCompany" placeholder="Ej: Constructora X" /></div>
     </div>
 
-    <div class="grid grid3">
-      <div><label>RUT</label><input id="clientRut"></div>
-      <div><label>Email</label><input id="clientEmail"></div>
-      <div><label>Teléfono</label><input id="clientPhone"></div>
+    <div style="margin-top:10px" class="grid grid3">
+      <div><label>RUT</label><input id="clientRut" /></div>
+      <div><label>Email</label><input id="clientEmail" /></div>
+      <div><label>Teléfono</label><input id="clientPhone" /></div>
     </div>
 
-    <div class="grid grid2">
-      <div><label>Dirección</label><input id="clientAddress"></div>
-      <div><label>Ciudad</label><input id="clientCity"></div>
+    <div style="margin-top:10px" class="grid grid2">
+      <div><label>Dirección</label><input id="clientAddress" /></div>
+      <div><label>Ciudad</label><input id="clientCity" /></div>
     </div>
 
-    <div class="grid grid2">
-      <div><label>Observaciones</label><textarea id="notes"></textarea></div>
+    <div style="margin-top:10px" class="grid grid2">
+      <div>
+        <label>Observaciones</label>
+        <textarea id="notes"></textarea>
+      </div>
       <div>
         <label>Opciones</label>
-        <div class="row" style="margin-top:8px;">
-          <label style="display:flex; gap:8px; align-items:center; font-size:14px;">
-            <input type="checkbox" id="optMakeExcel" checked style="width:auto;"> Generar Excel (.xlsx)
+        <div class="row" style="margin-top:8px">
+          <label style="display:flex;gap:8px;align-items:center;font-size:14px">
+            <input type="checkbox" id="optMakeExcel" checked style="width:auto" /> Generar Excel (.xlsx)
           </label>
-          <label style="display:flex; gap:8px; align-items:center; font-size:14px;">
-            <input type="checkbox" id="optMakePDF" checked style="width:auto;"> Generar PDF
+          <label style="display:flex;gap:8px;align-items:center;font-size:14px">
+            <input type="checkbox" id="optMakePDF" checked style="width:auto" /> Generar PDF
           </label>
         </div>
-        <div class="row" style="margin-top:10px;">
+
+        <div class="row" style="margin-top:10px">
           <button class="btn btnP" id="btnAddLine" type="button">Agregar línea</button>
           <button class="btn btnG" id="btnSave" type="button">Guardar</button>
           <button class="btn btnS" id="btnNew" type="button">Nueva</button>
@@ -145,41 +144,40 @@
   </div>
 
   <div class="card">
-    <div class="row" style="justify-content:space-between; align-items:center;">
-      <div style="font-weight:800;">Líneas de productos</div>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div style="font-weight:800">Líneas de productos</div>
       <div class="muted">Ingresas costo + margen(%) → precio unitario automático</div>
     </div>
 
-    <div class="tableWrap">
+    <div class="tableWrap" style="margin-top:10px">
       <table class="wideTable">
         <thead>
           <tr>
-            <th style="width:10%;">Cantidad</th>
-            <th style="width:12%;">Tipo unidad</th>
-            <th style="width:28%;">Producto</th>
-            <th style="width:12%;">Costo</th>
-            <th style="width:12%;">Margen %</th>
-            <th style="width:12%;">Precio unit.</th>
-            <th style="width:12%;">Total línea</th>
-            <th style="width:2%;"></th>
+            <th style="width:10%">Cantidad</th>
+            <th style="width:12%">Tipo unidad</th>
+            <th style="width:28%">Producto</th>
+            <th style="width:12%">Costo</th>
+            <th style="width:12%">Margen %</th>
+            <th style="width:12%">Precio unit.</th>
+            <th style="width:12%">Total línea</th>
+            <th style="width:2%"></th>
           </tr>
         </thead>
-        <tbody id="linesTbody"></tbody>
+        <tbody id="linesTbody">
+          <tr><td colspan="8" class="muted">Cargando líneas...</td></tr>
+        </tbody>
         <tfoot>
           <tr>
             <td colspan="6" class="rightAlign"><b>Subtotal</b></td>
-            <td class="rightAlign" id="subTotalCell">0</td>
-            <td></td>
+            <td class="rightAlign" id="subTotalCell">0</td><td></td>
           </tr>
           <tr>
             <td colspan="6" class="rightAlign"><b>IVA 19%</b></td>
-            <td class="rightAlign" id="ivaCell">0</td>
-            <td></td>
+            <td class="rightAlign" id="ivaCell">0</td><td></td>
           </tr>
           <tr>
             <td colspan="6" class="rightAlign"><b>Total</b></td>
-            <td class="rightAlign" id="totalCell">0</td>
-            <td></td>
+            <td class="rightAlign" id="totalCell">0</td><td></td>
           </tr>
         </tfoot>
       </table>
@@ -187,15 +185,15 @@
   </div>
 
   <div class="card">
-    <div class="row" style="justify-content:space-between; align-items:center;">
-      <div style="font-weight:800;">Historial</div>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div style="font-weight:800">Historial</div>
       <div class="row">
-        <input id="qSearch" placeholder="Buscar (cliente, RUT, N°)..." style="min-width:240px;">
+        <input id="qSearch" placeholder="Buscar cliente, RUT, N..." style="min-width:240px" />
         <button class="btn btnS" id="btnRefresh" type="button">Refrescar</button>
       </div>
     </div>
 
-    <div class="tableWrap">
+    <div class="tableWrap" style="margin-top:10px">
       <table>
         <thead>
           <tr>
@@ -208,6 +206,6 @@
   </div>
 </main>
 
-<script type="module" src="./app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
