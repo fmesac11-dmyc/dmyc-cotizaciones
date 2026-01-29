@@ -49,6 +49,8 @@ const elsubTotalCell = el("subTotalCell");
 const elivaCell = el("ivaCell");
 const eltotalCell = el("totalCell");
 
+let editingId = null;
+
 // Helpers
 function parseNum(v) {
   if (v == null) return 0;
@@ -674,4 +676,193 @@ async function resetForm() {
 async function handleSave() {
   const f = readForm();
   if (!f.clientName) return alert("Falta Cliente (nombre).");
-  if (!f.lines.length) return
+  if (!f.lines.length) return alert("Agrega al menos 1 línea.");
+
+  const totals = calc(f.lines);
+
+  let seq, code, createdAt;
+  if (editingId) {
+    const prev = await getQuote(editingId);
+    if (!prev) return alert("No se encontró la cotización a editar.");
+    seq = prev.seq;
+    code = prev.code;
+    createdAt = prev.createdAt;
+  } else {
+    const nx = await nextQuoteCode(f.clientName);
+    seq = nx.seq;
+    code = nx.code;
+    createdAt = new Date().toISOString();
+  }
+
+  const now = new Date().toISOString();
+  const quote = {
+    id: editingId || crypto.randomUUID(),
+    seq,
+    code,
+    createdAt,
+    updatedAt: now,
+    ...f,
+    totals
+  };
+
+  await putQuote(quote);
+
+  if (!editingId) {
+    await setSetting("seq", seq + 1);
+  }
+
+  elpillQuoteNo.textContent = code;
+
+  // Descargas opcionales
+  const jsonBlob = new Blob([JSON.stringify(quote, null, 2)], { type: "application/json" });
+  downloadBlob(jsonBlob, `${code}.json`);
+
+  if (f.optMakePDF) {
+    const pdfBlob = await makePDFBlob(quote);
+    downloadBlob(pdfBlob, `${code}.pdf`);
+  }
+  if (f.optMakeExcel) {
+    const xlsxBlob = await makeXLSXBlob(quote);
+    downloadBlob(xlsxBlob, `${code}.xlsx`);
+  }
+
+  await refreshHistory();
+  alert(editingId ? "Cotización actualizada." : "Cotización guardada.");
+
+  if (!editingId) await resetForm();
+}
+
+async function exportDB() {
+  const quotes = await listQuotes();
+
+  const json = new Blob([JSON.stringify(quotes, null, 2)], { type: "application/json" });
+  downloadBlob(json, "BaseDatos-DMYC.json");
+
+  const XLSX = window.XLSX;
+  const wb = XLSX.utils.book_new();
+
+  const rows = quotes
+    .slice()
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    .map(q => ({
+      codigo: q.code,
+      fecha: formatDateES(q.quoteDate),
+      valida_hasta: formatDateES(q.validUntil),
+      proximo_contacto: q.nextContact ? formatDateES(q.nextContact) : "",
+      estado: q.state,
+      moneda: q.currency,
+      subtotal: q.totals?.sub ?? 0,
+      iva19: q.totals?.iva ?? 0,
+      total: q.totals?.tot ?? 0,
+      cliente: q.clientName,
+      empresa: q.clientCompany,
+      rut: q.clientRut,
+      email: q.clientEmail,
+      telefono: q.clientPhone,
+      direccion: q.clientAddress,
+      ciudad: q.clientCity,
+      observaciones: q.notes
+    }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Cotizaciones");
+
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const xlsx = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  downloadBlob(xlsx, "BaseDatos-DMYC.xlsx");
+
+  alert("Exportación lista: JSON + Excel.");
+}
+
+async function importDB() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const text = await file.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return alert("JSON inválido.");
+    }
+
+    if (!Array.isArray(data)) return alert("El archivo debe contener un arreglo de cotizaciones.");
+    if (!confirm("Esto reemplazará tu base de datos local. ¿Continuar?")) return;
+
+    await replaceAllQuotes(data);
+
+    const maxSeq = data.reduce((m, q) => Math.max(m, Number(q.seq || 0)), 0);
+    await setSetting("seq", Math.max(maxSeq + 1, MIN_SEQ));
+
+    await refreshHistory();
+    await resetForm();
+    alert("Importación completada.");
+  };
+
+  input.click();
+}
+
+async function init() {
+  const updateStatus = () => {
+    elstatusLine.textContent = navigator.onLine
+      ? "Online (sin nube; guardando local)"
+      : "Offline (guardando local)";
+  };
+
+  window.addEventListener("online", updateStatus);
+  window.addEventListener("offline", updateStatus);
+  updateStatus();
+
+  // PWA install prompt (Chrome/Edge)
+  let deferredPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (elbtnInstall) elbtnInstall.style.display = "inline-block";
+  });
+
+  if (elbtnInstall) {
+    elbtnInstall.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      elbtnInstall.style.display = "none";
+    });
+  }
+
+  // Defaults
+  elpillIva.textContent = "IVA: 19%";
+  elquoteDate.value = todayISO();
+  elvalidUntil.value = plusDaysISO(5);
+
+  // Listeners
+  elbtnAddLine.addEventListener("click", () => addLine({ unitType: "UN", marginPct: 15 }));
+  elbtnSave.addEventListener("click", handleSave);
+  elbtnNew.addEventListener("click", resetForm);
+  elbtnRefresh.addEventListener("click", refreshHistory);
+  elqSearch.addEventListener("input", refreshHistory);
+
+  elcurrency.addEventListener("change", () => {
+    refreshLineTotals();
+    renderTotals();
+  });
+
+  elbtnExportDB.addEventListener("click", exportDB);
+  elbtnImportDB.addEventListener("click", importDB);
+
+  // SW
+  if ("serviceWorker" in navigator) {
+    try { await navigator.serviceWorker.register("./sw.js"); } catch {}
+  }
+
+  await resetForm();
+  await refreshHistory();
+}
+
+init();
