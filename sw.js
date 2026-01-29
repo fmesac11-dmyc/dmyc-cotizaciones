@@ -1,26 +1,29 @@
-const CACHE = "dmyc-cotizaciones-local-v6";
+const CACHE = 'dmyc-cotizaciones-local-v7';
 
-self.addEventListener("install", (e) => {
+self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll([
-      "./",
-      "./index.html",
-      "./app.js",
-      "./db.js",
-      "./manifest.webmanifest"
-    ]))
+    caches.open(CACHE).then((cache) =>
+      cache.addAll([
+        './',
+        './index.html',
+        './app.js',
+        './db.js',
+        './manifest.webmanifest',
+        './DMYC_logotipo_Mesa-de-trabajo-1.jpg'
+      ])
+    )
   );
 });
 
-self.addEventListener("activate", (e) => {
+self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map(k => (k !== CACHE ? caches.delete(k) : Promise.resolve())));
+    await Promise.all(keys.map((k) => (k !== CACHE ? caches.delete(k) : Promise.resolve())));
     await self.clients.claim();
   })());
 });
 
-self.addEventListener("fetch", (e) => {
+self.addEventListener('fetch', (e) => {
   e.respondWith((async () => {
     const cached = await caches.match(e.request, { ignoreSearch: true });
     if (cached) return cached;
@@ -29,8 +32,8 @@ self.addEventListener("fetch", (e) => {
       const cache = await caches.open(CACHE);
       cache.put(e.request, res.clone());
       return res;
-    } catch {
-      return cached || new Response("Offline", { status: 503 });
+    } catch (err) {
+      return cached || new Response('Offline', { status: 503 });
     }
   })());
 });
