@@ -4,11 +4,17 @@ const DB_VER = 1;
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VER);
+
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains("quotes")) db.createObjectStore("quotes", { keyPath: "id" });
-      if (!db.objectStoreNames.contains("settings")) db.createObjectStore("settings", { keyPath: "key" });
+      if (!db.objectStoreNames.contains("quotes")) {
+        db.createObjectStore("quotes", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("settings")) {
+        db.createObjectStore("settings", { keyPath: "key" });
+      }
     };
+
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -24,10 +30,10 @@ function storeReq(storeName, mode, fn) {
   }));
 }
 
-export async function getSetting(key, fallback=null){
+export async function getSetting(key, fallback = null) {
   const db = await openDB();
   return new Promise((resolve) => {
-    const tx = db.transaction("settings","readonly");
+    const tx = db.transaction("settings", "readonly");
     const s = tx.objectStore("settings");
     const r = s.get(key);
     r.onsuccess = () => resolve(r.result ? r.result.value : fallback);
@@ -35,16 +41,18 @@ export async function getSetting(key, fallback=null){
   });
 }
 
-export async function setSetting(key, value){
+export async function setSetting(key, value) {
   return storeReq("settings", "readwrite", s => s.put({ key, value }));
 }
 
-export async function putQuote(q){ return storeReq("quotes","readwrite", s => s.put(q)); }
+export async function putQuote(q) {
+  return storeReq("quotes", "readwrite", s => s.put(q));
+}
 
-export async function getQuote(id){
+export async function getQuote(id) {
   const db = await openDB();
   return new Promise((resolve) => {
-    const tx = db.transaction("quotes","readonly");
+    const tx = db.transaction("quotes", "readonly");
     const s = tx.objectStore("quotes");
     const r = s.get(id);
     r.onsuccess = () => resolve(r.result || null);
@@ -52,12 +60,14 @@ export async function getQuote(id){
   });
 }
 
-export async function deleteQuote(id){ return storeReq("quotes","readwrite", s => s.delete(id)); }
+export async function deleteQuote(id) {
+  return storeReq("quotes", "readwrite", s => s.delete(id));
+}
 
-export async function listQuotes(){
+export async function listQuotes() {
   const db = await openDB();
   return new Promise((resolve) => {
-    const tx = db.transaction("quotes","readonly");
+    const tx = db.transaction("quotes", "readonly");
     const s = tx.objectStore("quotes");
     const r = s.getAll();
     r.onsuccess = () => resolve(r.result || []);
@@ -65,10 +75,10 @@ export async function listQuotes(){
   });
 }
 
-export async function replaceAllQuotes(quotes){
+export async function replaceAllQuotes(quotes) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction("quotes","readwrite");
+    const tx = db.transaction("quotes", "readwrite");
     const s = tx.objectStore("quotes");
     s.clear();
     for (const q of quotes) s.put(q);
