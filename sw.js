@@ -1,4 +1,4 @@
-const CACHE = "dmyc-cotizaciones-v1";
+const CACHE = "dmyc-cotizaciones-local-v6";
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
@@ -7,14 +7,21 @@ self.addEventListener("install", (e) => {
       "./index.html",
       "./app.js",
       "./db.js",
-      "./drive.js",
       "./manifest.webmanifest"
     ]))
   );
 });
 
+self.addEventListener("activate", (e) => {
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => (k !== CACHE ? caches.delete(k) : Promise.resolve())));
+    await self.clients.claim();
+  })());
+});
+
 self.addEventListener("fetch", (e) => {
-  e.respondWith((async() => {
+  e.respondWith((async () => {
     const cached = await caches.match(e.request, { ignoreSearch: true });
     if (cached) return cached;
     try {
