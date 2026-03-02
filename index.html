@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DMYC - Sistema de Cotizaciones</title>
+    <link rel="manifest" href="manifest.webmanifest">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -11,7 +12,6 @@
 </head>
 <body class="bg-gray-100 font-sans p-4">
     <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-lg">
-        <!-- Cabecera -->
         <div class="flex justify-between items-center border-b pb-4 mb-4">
             <div>
                 <h1 class="text-3xl font-bold text-orange-600">DMYC Cotizaciones</h1>
@@ -26,9 +26,7 @@
             </div>
         </div>
 
-        <!-- Vista de Nueva Cotización -->
         <div id="newQuoteView">
-            <!-- Configuración Moneda -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-orange-50 p-4 rounded mb-6">
                 <div>
                     <label class="block font-bold">Moneda Costos:</label>
@@ -43,7 +41,6 @@
                 </div>
             </div>
 
-            <!-- Datos del Cliente -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div><label class="block font-bold">Cliente / Empresa</label><input type="text" id="clientName" class="w-full border p-2 rounded"></div>
                 <div><label class="block font-bold">RUT Cliente</label><input type="text" id="clientRut" class="w-full border p-2 rounded"></div>
@@ -59,19 +56,16 @@
                 </div>
             </div>
 
-            <!-- Materiales -->
             <div class="mb-6">
                 <div class="flex justify-between items-center mb-2">
                     <h3 class="text-xl font-bold border-b pb-2">Líneas de Materiales</h3>
                     <div>
-                        <!-- BOTÓN DE CARGA MASIVA -->
                         <input type="file" id="bulkUpload" accept=".xlsx" class="hidden">
                         <button id="btnBulkUpload" class="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700">
                             📁 Cargar Excel Masivo
                         </button>
                     </div>
                 </div>
-                
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
@@ -86,20 +80,16 @@
                                 <th class="p-2 border w-12"></th>
                             </tr>
                         </thead>
-                        <tbody id="linesBody">
-                            <!-- Filas dinámicas -->
-                        </tbody>
+                        <tbody id="linesBody"></tbody>
                     </table>
                 </div>
                 <button id="btnAddLine" class="mt-2 bg-gray-300 text-gray-800 px-4 py-2 rounded font-bold">+ Agregar Línea Manual</button>
             </div>
 
-            <!-- Observaciones y Totales -->
             <div class="flex flex-wrap md:flex-nowrap gap-6">
                 <div class="w-full md:w-1/2">
-                    <label class="block font-bold">Observaciones / Condiciones:</label>
-                    <textarea id="notes" rows="4" class="w-full border p-2 rounded">Validez de la oferta: 15 días.
-Forma de pago: A convenir.</textarea>
+                    <label class="block font-bold">Observaciones:</label>
+                    <textarea id="notes" rows="4" class="w-full border p-2 rounded">Validez de la oferta: 15 días.</textarea>
                 </div>
                 <div class="w-full md:w-1/2 bg-gray-50 p-4 rounded border">
                     <div class="flex justify-between font-bold text-lg mb-2"><span>Subtotal Neto (CLP):</span><span id="subtotalText">$0</span></div>
@@ -115,7 +105,6 @@ Forma de pago: A convenir.</textarea>
             </div>
         </div>
 
-        <!-- Vista de Historial (Oculta por defecto) -->
         <div id="historyView" class="hidden">
             <h2 class="text-2xl font-bold mb-4">Historial de Cotizaciones</h2>
             <button id="btnBackToNew" class="mb-4 bg-gray-300 px-4 py-2 rounded text-gray-800">← Volver a Nueva Cotización</button>
@@ -138,5 +127,10 @@ Forma de pago: A convenir.</textarea>
     </div>
 
     <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
 </body>
 </html>
