@@ -1,211 +1,142 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DMYC Cotizaciones</title>
-
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#0b4aa2" />
-
-  <!-- PDF -->
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
-
-  <!-- Excel -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-
-  <style>
-    :root{--b:#0b4aa2;--g:#f3f5f7;--txt:#1f2937}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;color:var(--txt);background:var(--g)}
-    header{background:var(--b);color:#fff;padding:14px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between}
-    header .right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    main{max-width:1100px;margin:16px auto;padding:0 12px}
-    .card{background:#fff;border-radius:10px;padding:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:12px}
-    .grid{display:grid;gap:10px}
-    .grid2{grid-template-columns:1fr 1fr}
-    .grid3{grid-template-columns:1fr 1fr 1fr}
-    label{font-size:12px;color:#475569}
-    input,select,textarea{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box}
-    textarea{min-height:80px}
-    table{width:100%;border-collapse:collapse}
-    th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left;font-size:14px;vertical-align:top}
-    th{background:#f8fafc;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:.04em}
-    .btn{border:0;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:600}
-    .btnP{background:var(--b);color:#fff}
-    .btnS{background:#111827;color:#fff}
-    .btnG{background:#16a34a;color:#fff}
-    .btnW{background:#f59e0b;color:#111827}
-    .btnD{background:#ef4444;color:#fff}
-    .row{display:flex;gap:8px;flex-wrap:wrap}
-    .muted{color:#64748b;font-size:12px}
-    .kpi{display:flex;gap:12px;flex-wrap:wrap}
-    .pill{background:#eef2ff;color:#3730a3;padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px}
-    .rightAlign{text-align:right}
-    .tableWrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
-    .wideTable{min-width:1200px}
-    .wideTable input,.wideTable select{width:100%;min-width:0}
-    @media (max-width:900px){.grid2,.grid3{grid-template-columns:1fr}header{flex-direction:column;align-items:flex-start}}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DMYC - Sistema de Cotizaciones</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 </head>
-
-<body>
-<header>
-  <div>
-    <div style="font-weight:800;letter-spacing:.02em">DMYC Cotizaciones</div>
-    <div class="muted" id="statusLine">Cargando...</div>
-  </div>
-
-  <div class="right">
-    <button class="btn btnS" id="btnInstall" style="display:none" type="button">Instalar</button>
-    <button class="btn btnS" id="btnExportDB" type="button">Exportar BD (Excel+JSON)</button>
-    <button class="btn btnW" id="btnImportDB" type="button">Importar BD (JSON)</button>
-  </div>
-</header>
-
-<main>
-  <div class="card">
-    <div class="kpi">
-      <span class="pill" id="pillQuoteNo">COT-0401-XXXX</span>
-      <span class="pill" id="pillCurrency">Moneda: CLP</span>
-      <span class="pill" id="pillIva">IVA: 19%</span>
-      <span class="pill" id="pillEditing">Modo: Nueva</span>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="grid grid3">
-      <div>
-        <label>Moneda</label>
-        <select id="currency">
-          <option value="CLP">CLP</option>
-          <option value="USD">USD</option>
-        </select>
-      </div>
-      <div>
-        <label>Dólar del día referencial</label>
-        <input id="usdRate" type="number" step="0.01" value="950" />
-      </div>
-      <div>
-        <label>Estado</label>
-        <select id="state">
-          <option value="Pendiente">Pendiente</option>
-          <option value="Ganada">Ganada</option>
-          <option value="Perdida">Perdida</option>
-        </select>
-      </div>
-    </div>
-
-    <div style="margin-top:10px" class="grid grid3">
-      <div><label>Fecha cotización</label><input id="quoteDate" type="date" /></div>
-      <div><label>Válida hasta</label><input id="validUntil" type="date" /></div>
-      <div><label>Próximo contacto</label><input id="nextContact" type="date" /></div>
-    </div>
-
-    <div style="margin-top:10px" class="grid grid2">
-      <div><label>Cliente nombre</label><input id="clientName" placeholder="Ej: Misael" /></div>
-      <div><label>Empresa</label><input id="clientCompany" placeholder="Ej: Constructora X" /></div>
-    </div>
-
-    <div style="margin-top:10px" class="grid grid3">
-      <div><label>RUT</label><input id="clientRut" /></div>
-      <div><label>Email</label><input id="clientEmail" /></div>
-      <div><label>Teléfono</label><input id="clientPhone" /></div>
-    </div>
-
-    <div style="margin-top:10px" class="grid grid2">
-      <div><label>Dirección</label><input id="clientAddress" /></div>
-      <div><label>Ciudad</label><input id="clientCity" /></div>
-    </div>
-
-    <div style="margin-top:10px" class="grid grid2">
-      <div>
-        <label>Observaciones</label>
-        <textarea id="notes"></textarea>
-      </div>
-      <div>
-        <label>Opciones</label>
-        <div class="row" style="margin-top:8px">
-          <label style="display:flex;gap:8px;align-items:center;font-size:14px">
-            <input type="checkbox" id="optMakeExcel" checked style="width:auto" /> Generar Excel (.xlsx)
-          </label>
-          <label style="display:flex;gap:8px;align-items:center;font-size:14px">
-            <input type="checkbox" id="optMakePDF" checked style="width:auto" /> Generar PDF
-          </label>
+<body class="bg-gray-100 font-sans p-4">
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-lg">
+        <!-- Cabecera -->
+        <div class="flex justify-between items-center border-b pb-4 mb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-orange-600">DMYC Cotizaciones</h1>
+                <p class="text-gray-500">RUT: 76.935.323-2 | Vendedor: Felipe Mesa</p>
+            </div>
+            <div class="text-right">
+                <h2 class="text-xl font-bold text-gray-700" id="quoteNumber">COT-0400-XXXX</h2>
+                <div class="mt-2 flex gap-2 justify-end">
+                    <button id="btnViewHistory" class="bg-gray-800 text-white px-4 py-2 rounded">Ver Historial</button>
+                    <button id="btnSync" class="bg-blue-600 text-white px-4 py-2 rounded">Sincronizar PC</button>
+                </div>
+            </div>
         </div>
 
-        <div class="row" style="margin-top:10px">
-          <button class="btn btnP" id="btnAddLine" type="button">Agregar línea</button>
-          <button class="btn btnG" id="btnSave" type="button">Guardar</button>
-          <button class="btn btnS" id="btnNew" type="button">Nueva</button>
+        <!-- Vista de Nueva Cotización -->
+        <div id="newQuoteView">
+            <!-- Configuración Moneda -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-orange-50 p-4 rounded mb-6">
+                <div>
+                    <label class="block font-bold">Moneda Costos:</label>
+                    <select id="currency" class="w-full border p-2 rounded">
+                        <option value="CLP">Pesos (CLP)</option>
+                        <option value="USD">Dólares (USD)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-bold">Valor Dólar Hoy (CLP):</label>
+                    <input type="number" id="exchangeRate" value="950" class="w-full border p-2 rounded">
+                </div>
+            </div>
+
+            <!-- Datos del Cliente -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div><label class="block font-bold">Cliente / Empresa</label><input type="text" id="clientName" class="w-full border p-2 rounded"></div>
+                <div><label class="block font-bold">RUT Cliente</label><input type="text" id="clientRut" class="w-full border p-2 rounded"></div>
+                <div><label class="block font-bold">Dirección / Obra</label><input type="text" id="clientAddress" class="w-full border p-2 rounded"></div>
+                <div><label class="block font-bold">Teléfono</label><input type="text" id="clientPhone" class="w-full border p-2 rounded"></div>
+                <div><label class="block font-bold">Email</label><input type="email" id="clientEmail" class="w-full border p-2 rounded"></div>
+                <div><label class="block font-bold">Estado</label>
+                    <select id="quoteStatus" class="w-full border p-2 rounded">
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Ganado">Ganado</option>
+                        <option value="Perdido">Perdido</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Materiales -->
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-xl font-bold border-b pb-2">Líneas de Materiales</h3>
+                    <div>
+                        <!-- BOTÓN DE CARGA MASIVA -->
+                        <input type="file" id="bulkUpload" accept=".xlsx" class="hidden">
+                        <button id="btnBulkUpload" class="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700">
+                            📁 Cargar Excel Masivo
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-200">
+                                <th class="p-2 border">Descripción</th>
+                                <th class="p-2 border w-24">Cant.</th>
+                                <th class="p-2 border w-24">Unid.</th>
+                                <th class="p-2 border w-32">Costo</th>
+                                <th class="p-2 border w-24">Margen %</th>
+                                <th class="p-2 border w-32">P. Venta (CLP)</th>
+                                <th class="p-2 border w-32">Total (CLP)</th>
+                                <th class="p-2 border w-12"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="linesBody">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+                </div>
+                <button id="btnAddLine" class="mt-2 bg-gray-300 text-gray-800 px-4 py-2 rounded font-bold">+ Agregar Línea Manual</button>
+            </div>
+
+            <!-- Observaciones y Totales -->
+            <div class="flex flex-wrap md:flex-nowrap gap-6">
+                <div class="w-full md:w-1/2">
+                    <label class="block font-bold">Observaciones / Condiciones:</label>
+                    <textarea id="notes" rows="4" class="w-full border p-2 rounded">Validez de la oferta: 15 días.
+Forma de pago: A convenir.</textarea>
+                </div>
+                <div class="w-full md:w-1/2 bg-gray-50 p-4 rounded border">
+                    <div class="flex justify-between font-bold text-lg mb-2"><span>Subtotal Neto (CLP):</span><span id="subtotalText">$0</span></div>
+                    <div class="flex justify-between font-bold text-lg mb-2 text-gray-600"><span>IVA 19%:</span><span id="ivaText">$0</span></div>
+                    <div class="flex justify-between font-bold text-2xl text-orange-600 border-t pt-2"><span>TOTAL (CLP):</span><span id="totalText">$0</span></div>
+                </div>
+            </div>
+
+            <div class="mt-6 text-right">
+                <button id="btnSave" class="bg-orange-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-orange-700 shadow-lg">
+                    💾 Guardar y Generar PDF
+                </button>
+            </div>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <div class="card">
-    <div class="row" style="justify-content:space-between;align-items:center">
-      <div style="font-weight:800">Líneas de productos</div>
-      <div class="muted">Ingresas costo + margen(%) → precio unitario automático</div>
-    </div>
-
-    <div class="tableWrap" style="margin-top:10px">
-      <table class="wideTable">
-        <thead>
-          <tr>
-            <th style="width:10%">Cantidad</th>
-            <th style="width:12%">Tipo unidad</th>
-            <th style="width:28%">Producto</th>
-            <th style="width:12%">Costo</th>
-            <th style="width:12%">Margen %</th>
-            <th style="width:12%">Precio unit.</th>
-            <th style="width:12%">Total línea</th>
-            <th style="width:2%"></th>
-          </tr>
-        </thead>
-        <tbody id="linesTbody">
-          <tr><td colspan="8" class="muted">Cargando líneas...</td></tr>
-        </tbody>
-        <tfoot>
-          <tr>
-            <td colspan="6" class="rightAlign"><b>Subtotal</b></td>
-            <td class="rightAlign" id="subTotalCell">0</td><td></td>
-          </tr>
-          <tr>
-            <td colspan="6" class="rightAlign"><b>IVA 19%</b></td>
-            <td class="rightAlign" id="ivaCell">0</td><td></td>
-          </tr>
-          <tr>
-            <td colspan="6" class="rightAlign"><b>Total</b></td>
-            <td class="rightAlign" id="totalCell">0</td><td></td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="row" style="justify-content:space-between;align-items:center">
-      <div style="font-weight:800">Historial</div>
-      <div class="row">
-        <input id="qSearch" placeholder="Buscar cliente, RUT, N..." style="min-width:240px" />
-        <button class="btn btnS" id="btnRefresh" type="button">Refrescar</button>
-      </div>
+        <!-- Vista de Historial (Oculta por defecto) -->
+        <div id="historyView" class="hidden">
+            <h2 class="text-2xl font-bold mb-4">Historial de Cotizaciones</h2>
+            <button id="btnBackToNew" class="mb-4 bg-gray-300 px-4 py-2 rounded text-gray-800">← Volver a Nueva Cotización</button>
+            <div class="overflow-x-auto">
+                <table class="w-full bg-white border">
+                    <thead class="bg-gray-800 text-white">
+                        <tr>
+                            <th class="p-2">Número</th>
+                            <th class="p-2">Fecha</th>
+                            <th class="p-2">Cliente</th>
+                            <th class="p-2">Total CLP</th>
+                            <th class="p-2">Estado</th>
+                            <th class="p-2">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <div class="tableWrap" style="margin-top:10px">
-      <table>
-        <thead>
-          <tr>
-            <th>N°</th><th>Fecha</th><th>Cliente</th><th>Moneda</th><th>Total</th><th>Estado</th><th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody id="histTbody"></tbody>
-      </table>
-    </div>
-  </div>
-</main>
-
-<script type="module" src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
