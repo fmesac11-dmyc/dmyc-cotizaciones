@@ -1,868 +1,366 @@
-import { getSetting, setSetting, putQuote, getQuote, deleteQuote, listQuotes, replaceAllQuotes } from "./db.js";
-
-const IVA_RATE = 0.19;
-const MIN_SEQ = 401;
-const LOGO_URL = "./DMYC_logotipo_Mesa-de-trabajo-1.jpg";
-
-const el = (id) => document.getElementById(id);
-
-// Cache elementos (evita ReferenceError)
-const elpillQuoteNo = el("pillQuoteNo");
-const elpillCurrency = el("pillCurrency");
-const elpillIva = el("pillIva");
-const elpillEditing = el("pillEditing");
-const elstatusLine = el("statusLine");
-
-const elcurrency = el("currency");
-const elusdRate = el("usdRate");
-const elstate = el("state");
-
-const elquoteDate = el("quoteDate");
-const elvalidUntil = el("validUntil");
-const elnextContact = el("nextContact");
-
-const elclientName = el("clientName");
-const elclientCompany = el("clientCompany");
-const elclientRut = el("clientRut");
-const elclientEmail = el("clientEmail");
-const elclientPhone = el("clientPhone");
-const elclientAddress = el("clientAddress");
-const elclientCity = el("clientCity");
-const elnotes = el("notes");
-
-const eloptMakeExcel = el("optMakeExcel");
-const eloptMakePDF = el("optMakePDF");
-
-const elbtnAddLine = el("btnAddLine");
-const elbtnSave = el("btnSave");
-const elbtnNew = el("btnNew");
-const elbtnRefresh = el("btnRefresh");
-const elbtnExportDB = el("btnExportDB");
-const elbtnImportDB = el("btnImportDB");
-const elbtnInstall = el("btnInstall");
-
-const elqSearch = el("qSearch");
-const elhistTbody = el("histTbody");
-
-const ellinesTbody = el("linesTbody");
-const elsubTotalCell = el("subTotalCell");
-const elivaCell = el("ivaCell");
-const eltotalCell = el("totalCell");
-
-let editingId = null;
-
-// Helpers
-function parseNum(v) {
-  if (v == null) return 0;
-  const s = String(v).trim().replace(/\s+/g, "").replace(",", ".");
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
-}
-
-const normalize4 = (s) =>
-  (s || "")
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toUpperCase()
-    .slice(0, 4) || "XXXX";
-
-function money(n, cur) {
-  const decimals = cur === "CLP" ? 0 : 2;
-  const rounded = cur === "CLP" ? Math.round(Number(n || 0)) : Number(n || 0);
-  const opt = { minimumFractionDigits: decimals, maximumFractionDigits: decimals };
-  return (cur === "USD" ? "US$ " : "$ ") + rounded.toLocaleString("es-CL", opt);
-}
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function plusDaysISO(d) {
-  return new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
-}
-
-function formatDateES(isoDate) {
-  if (!isoDate) return "";
-  const [year, month, day] = isoDate.split("-");
-  const meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-  const m = parseInt(month, 10) - 1;
-  const dd = parseInt(day, 10);
-  const y = parseInt(year, 10);
-  return `${dd} de ${meses[m]} de ${y}`;
-}
-
-// Correlativo
-async function nextQuoteCode(clientName) {
-  let seq = await getSetting("seq", MIN_SEQ);
-  seq = Math.max(Number(seq || 0), MIN_SEQ);
-  const code = `COT-${String(seq).padStart(4, "0")}-${normalize4(clientName)}`;
-  return { seq, code };
-}
-
-// Precio venta desde costo+margen%
-function unitPriceFromCostAndMargin(cost, marginPct) {
-  const c = parseNum(cost);
-  const m = parseNum(marginPct);
-  if (c <= 0) return 0;
-  if (m < 0 || m >= 100) return 0;
-  return c / (1 - m / 100);
-}
-
-function marginPctFromCostAndPrice(cost, unitPrice) {
-  const c = parseNum(cost);
-  const p = parseNum(unitPrice);
-  if (p <= 0) return 0;
-  return ((p - c) / p) * 100;
-}
-
-function formatInputNumber(n, cur) {
-  if (!n) return "";
-  return cur === "CLP" ? String(Math.round(n)) : Number(n).toFixed(2);
-}
-
-function readLines() {
-  const cur = elcurrency.value;
-  const rows = [...document.querySelectorAll("[data-line]")];
-  return rows
-    .map((r) => {
-      const qty = parseNum(r.querySelector(".qty")?.value);
-      const unitType = (r.querySelector(".unitType")?.value || "").trim();
-      const name = (r.querySelector(".name")?.value || "").trim();
-      const cost = parseNum(r.querySelector(".cost")?.value);
-      const marginPct = parseNum(r.querySelector(".marginPct")?.value);
-
-      let unitPrice = unitPriceFromCostAndMargin(cost, marginPct);
-      if (cur === "CLP") unitPrice = Math.round(unitPrice);
-
-      return { qty, unitType, name, cost, marginPct, unitPrice };
-    })
-    .filter((x) => x.name && x.qty > 0);
-}
-
-function calc(lines) {
-  const cur = elcurrency.value;
-  let sub = lines.reduce((a, l) => a + l.qty * l.unitPrice, 0);
-  if (cur === "CLP") sub = Math.round(sub);
-
-  let iva = sub * IVA_RATE;
-  if (cur === "CLP") iva = Math.round(iva);
-
-  let tot = sub + iva;
-  if (cur === "CLP") tot = Math.round(tot);
-
-  return { cur, sub, iva, tot };
-}
-
-function refreshLineTotals() {
-  const cur = elcurrency.value;
-  [...document.querySelectorAll("[data-line]")].forEach((r) => {
-    const qty = parseNum(r.querySelector(".qty")?.value);
-    const cost = parseNum(r.querySelector(".cost")?.value);
-    const marginPct = parseNum(r.querySelector(".marginPct")?.value);
-
-    let unitPrice = unitPriceFromCostAndMargin(cost, marginPct);
-    if (cur === "CLP") unitPrice = Math.round(unitPrice);
-
-    let lineTotal = qty * unitPrice;
-    if (cur === "CLP") lineTotal = Math.round(lineTotal);
-
-    const unitPriceEl = r.querySelector(".unitPrice");
-    if (unitPriceEl) unitPriceEl.value = formatInputNumber(unitPrice, cur);
-
-    const lineTotalEl = r.querySelector(".lineTotal");
-    if (lineTotalEl) lineTotalEl.textContent = money(lineTotal, cur);
-  });
-}
-
-function renderTotals() {
-  const lines = readLines();
-  const { cur, sub, iva, tot } = calc(lines);
-  elsubTotalCell.textContent = money(sub, cur);
-  elivaCell.textContent = money(iva, cur);
-  eltotalCell.textContent = money(tot, cur);
-  elpillCurrency.textContent = `Moneda: ${cur}`;
-}
-
-function addLine(pref = {}) {
-  const tr = document.createElement("tr");
-  tr.setAttribute("data-line", "1");
-  tr.innerHTML = `
-    <td><input class="qty" type="number" step="0.01" value="${pref.qty ?? ""}"></td>
-    <td>
-      <select class="unitType">
-        <option value="UN" ${pref.unitType === "UN" ? "selected" : ""}>UN</option>
-        <option value="HRS" ${pref.unitType === "HRS" ? "selected" : ""}>HRS</option>
-        <option value="M2" ${pref.unitType === "M2" ? "selected" : ""}>M2</option>
-        <option value="M3" ${pref.unitType === "M3" ? "selected" : ""}>M3</option>
-        <option value="KG" ${pref.unitType === "KG" ? "selected" : ""}>KG</option>
-        <option value="GL" ${pref.unitType === "GL" ? "selected" : ""}>GL</option>
-      </select>
-    </td>
-    <td><input class="name" placeholder="Descripción del producto" value="${(pref.name ?? "").replaceAll('"', "&quot;")}"></td>
-    <td><input class="cost" type="text" inputmode="decimal" placeholder="Ej 25000 o 2,41" value="${pref.cost ?? ""}"></td>
-    <td><input class="marginPct" type="text" inputmode="decimal" placeholder="Ej 15" value="${pref.marginPct ?? 15}"></td>
-    <td><input class="unitPrice" type="text" inputmode="decimal" value="${pref.unitPrice ?? ""}" readonly></td>
-    <td class="lineTotal rightAlign"></td>
-    <td><button class="btn btnD btnDel" type="button">X</button></td>
-  `;
-
-  tr.querySelector(".btnDel").addEventListener("click", () => {
-    tr.remove();
-    refreshLineTotals();
-    renderTotals();
-  });
-
-  ["qty", "unitType", "name", "cost", "marginPct"].forEach((cls) => {
-    tr.querySelector("." + cls).addEventListener("input", () => {
-      refreshLineTotals();
-      renderTotals();
-    });
-  });
-
-  ellinesTbody.appendChild(tr);
-  refreshLineTotals();
-  renderTotals();
-}
-
-function readForm() {
-  const lines = readLines();
-  return {
-    currency: elcurrency.value,
-    usdRate: parseNum(elusdRate.value),
-    state: elstate.value,
-    quoteDate: elquoteDate.value,
-    validUntil: elvalidUntil.value,
-    nextContact: elnextContact.value,
-    clientName: elclientName.value.trim(),
-    clientCompany: elclientCompany.value.trim(),
-    clientRut: elclientRut.value.trim(),
-    clientEmail: elclientEmail.value.trim(),
-    clientPhone: elclientPhone.value.trim(),
-    clientAddress: elclientAddress.value.trim(),
-    clientCity: elclientCity.value.trim(),
-    notes: elnotes.value.trim(),
-    optMakeExcel: eloptMakeExcel.checked,
-    optMakePDF: eloptMakePDF.checked,
-    lines
-  };
-}
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function blobToDataURL(blob) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-
-async function imageUrlToDataURL(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error("No se pudo cargar imagen: " + url);
-  const blob = await res.blob();
-  return blobToDataURL(blob);
-}
-
-function dataUrlToJsPdfFormat(dataUrl) {
-  const m = String(dataUrl).match(/^data:image\/(png|jpeg|jpg)/i);
-  const t = (m?.[1] || "").toLowerCase();
-  return t === "png" ? "PNG" : "JPEG";
-}
-
-// PDF
-async function makePDFBlob(quote) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF("p", "mm", "a4");
-
-  const cur = quote.currency;
-  const { sub, iva, tot } = quote.totals;
-
-  const naranja = "FF5B00";
-  const negro = "1B1B1B";
-  const turquesa = "098F96";
-  const gris = "9E9EA0";
-  const grisClaro = "F4F4F4";
-
-  const hexToRgb = (hex) => {
-    const h = hex.replace("#", "");
-    const bigint = parseInt(h, 16);
-    return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
-  };
-  const setFillHex = (hex) => { const {r,g,b} = hexToRgb(hex); doc.setFillColor(r,g,b); };
-  const setTextHex = (hex) => { const {r,g,b} = hexToRgb(hex); doc.setTextColor(r,g,b); };
-
-  // Header
-  setFillHex(turquesa);
-  doc.rect(0, 0, 210, 22, "F");
-  setFillHex(naranja);
-  doc.rect(155, 0, 55, 22, "F");
-
-  setTextHex("FFFFFF");
-  doc.setFontSize(10);
-  doc.setFont(undefined, "bold");
-  doc.text("DMYC spa 76.935.323-2", 14, 7);
-  doc.setFontSize(8);
-  doc.setFont(undefined, "normal");
-  doc.text("Cerro el plomo 5931 of 1213, Las Condes", 14, 11);
-  doc.text("Región Metropolitana", 14, 14);
-
-  // Logo centro
-  try {
-    const logoDataUrl = await imageUrlToDataURL(LOGO_URL);
-    const fmt = dataUrlToJsPdfFormat(logoDataUrl);
-
-    const maxW = 65, maxH = 19;
-    const img = new Image();
-    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = logoDataUrl; });
-
-    const iw = img.naturalWidth || 1;
-    const ih = img.naturalHeight || 1;
-    const scale = Math.min(maxW / iw, maxH / ih);
-    const w = iw * scale;
-    const h = ih * scale;
-    const x = (210 - w) / 2;
-    const y = (22 - h) / 2;
-    doc.addImage(logoDataUrl, fmt, x, y, w, h);
-  } catch {}
-
-  setTextHex("FFFFFF");
-  doc.setFontSize(13);
-  doc.setFont(undefined, "bold");
-  doc.text("COTIZACIÓN", 160, 8);
-  doc.setFontSize(10);
-  doc.text(`N° ${quote.code}`, 160, 14);
-
-  // Fechas
-  setTextHex(negro);
-  doc.setFontSize(10);
-  doc.setFont(undefined, "normal");
-  let y = 30;
-
-  doc.text(`FECHA: ${formatDateES(quote.quoteDate)}`, 14, y);
-  doc.text(`PRESUPUESTO VÁLIDO HASTA: ${formatDateES(quote.validUntil)}`, 100, y);
-
-  // Cliente
-  y += 10;
-  doc.setFont(undefined, "bold");
-  doc.text("PRESUPUESTO PARA", 14, y);
-
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont(undefined, "normal");
-
-  const clientData = [
-    `Contacto: ${quote.clientName || ""}`,
-    `Empresa: ${quote.clientCompany || ""}`,
-    `Rut: ${quote.clientRut || ""}`,
-    `Dirección: ${quote.clientAddress || ""}`,
-    `Ciudad: ${quote.clientCity || ""}`,
-    `Teléfono: ${quote.clientPhone || ""}`,
-    `Email: ${quote.clientEmail || ""}`
-  ];
-  clientData.forEach((line) => { doc.text(line, 14, y); y += 4; });
-
-  // Autor/Vendedor/Términos
-  const xr = 125, xv = 155, y0 = 40;
-  doc.setFontSize(10);
-  doc.setFont(undefined, "bold");
-  doc.text("AUTOR", xr, y0);
-  doc.setFont(undefined, "normal");
-  doc.text("FMC", xv, y0);
-
-  doc.setFont(undefined, "bold");
-  doc.text("VENDEDOR", xr, y0 + 9);
-  doc.setFont(undefined, "normal");
-  doc.text("FMC", xv, y0 + 9);
-
-  doc.setFont(undefined, "bold");
-  doc.text("TÉRMINOS", xr, y0 + 18);
-  doc.setFont(undefined, "normal");
-  doc.text("Pago Transferencia", xv, y0 + 18);
-
-  // Tabla
-  y = 80;
-  setFillHex(turquesa);
-  doc.rect(14, y - 4, 182, 7, "F");
-  setTextHex("FFFFFF");
-  doc.setFontSize(10);
-  doc.setFont(undefined, "bold");
-  doc.text("CANTIDAD", 16, y);
-  doc.text("DESCRIPCIÓN", 34, y);
-  doc.text("PRECIO POR UNIDAD", 132, y, { align: "right" });
-  doc.text("UNIDAD", 150, y);
-  doc.text("TOTAL", 196, y, { align: "right" });
-
-  y += 9;
-  setTextHex(negro);
-  doc.setFontSize(9);
-  doc.setFont(undefined, "normal");
-
-  quote.lines.forEach((line, idx) => {
-    if (idx % 2 === 0) {
-      setFillHex(grisClaro);
-      doc.rect(14, y - 5, 182, 8, "F");
+// ==========================================
+// CONFIGURACIÓN INICIAL Y BASE DE DATOS
+// ==========================================
+const MIN_SEQ = 400; // Numeración parte en 400
+let db;
+let lines = [];
+let currentQuoteId = null;
+
+// Inicializar IndexedDB para guardar offline
+const request = indexedDB.open("DMYC_QuotesDB", 1);
+request.onupgradeneeded = (e) => {
+    db = e.target.result;
+    if (!db.objectStoreNames.contains("quotes")) {
+        db.createObjectStore("quotes", { keyPath: "id" });
     }
-    const qty = String(line.qty ?? "");
-    const unit = (line.unitType || "UN").toString();
-    const desc = (line.name || "").toString();
+    if (!db.objectStoreNames.contains("settings")) {
+        db.createObjectStore("settings", { keyPath: "key" });
+    }
+};
+request.onsuccess = (e) => {
+    db = e.target.result;
+    initApp();
+};
 
-    doc.text(qty, 16, y);
-    doc.text(desc, 34, y, { maxWidth: 92 });
-    doc.text(money(line.unitPrice, cur), 132, y, { align: "right" });
-    doc.text(unit, 150, y);
-    doc.text(money((line.qty || 0) * (line.unitPrice || 0), cur), 196, y, { align: "right" });
-
-    y += 8;
-    if (y > 230) y = 230;
-  });
-
-  // Línea
-  const { r, g, b } = hexToRgb(gris);
-  doc.setDrawColor(r, g, b);
-  doc.line(14, y, 196, y);
-
-  // Totales (con más espacio)
-  const xLabel = 135;
-  const xValue = 196;
-  const xBar = 132;
-  const wBar = 64;
-
-  y += 8;
-  doc.setFontSize(11);
-  doc.setFont(undefined, "normal");
-
-  setTextHex(gris);
-  doc.text("SUBTOTAL", xLabel, y);
-  setTextHex(negro);
-  doc.text(money(sub, cur), xValue, y, { align: "right" });
-
-  y += 8;
-  setTextHex(gris);
-  doc.text("MONTO IVA (19%)", xLabel, y);
-  setTextHex(negro);
-  doc.text(money(iva, cur), xValue, y, { align: "right" });
-
-  y += 10;
-  setFillHex(naranja);
-  doc.rect(xBar, y - 7, wBar, 10, "F");
-  setTextHex("FFFFFF");
-  doc.setFont(undefined, "bold");
-  doc.text("TOTAL", xLabel, y);
-  doc.text(money(tot, cur), xValue, y, { align: "right" });
-
-  // Obs
-  y += 16;
-  setTextHex(negro);
-  doc.setFontSize(10);
-  doc.setFont(undefined, "bold");
-  doc.text("OBS", 14, y);
-
-  doc.setFont(undefined, "normal");
-  doc.setFontSize(9);
-  const obsText = (quote.notes || "").trim();
-  const obsLines = doc.splitTextToSize(obsText, 182);
-  doc.text(obsLines, 24, y);
-
-  // Footer
-  let fy = 268;
-  setTextHex(gris);
-  doc.setFontSize(8);
-  doc.setFont(undefined, "normal");
-  doc.text("Si tiene cualquier tipo de pregunta acerca de esta oferta, póngase en contacto indicando número de cotización.", 14, fy, { maxWidth: 182 });
-
-  fy += 8;
-  setTextHex(negro);
-  doc.setFont(undefined, "bold");
-  doc.text("TRANSFERENCIA", 14, fy);
-
-  doc.setFont(undefined, "normal");
-  doc.text("DMYC Spa Banco BCI Cta. Cte. 95148019 INFODMYC.CL", 14, fy + 4);
-
-  setFillHex(turquesa);
-  doc.rect(0, 285, 210, 12, "F");
-  setTextHex("FFFFFF");
-  doc.setFontSize(11);
-  doc.setFont(undefined, "bold");
-  doc.text("GRACIAS POR SU CONFIANZA.", 105, 292, { align: "center" });
-
-  return doc.output("blob");
+async function initApp() {
+    await updateNextQuoteCode();
+    loadSetting('exchangeRate', 950).then(val => document.getElementById('exchangeRate').value = val);
+    addLine(); // Agregar una línea vacía al inicio
 }
 
-// Excel
-async function makeXLSXBlob(quote) {
-  const XLSX = window.XLSX;
-  const wb = XLSX.utils.book_new();
+// ==========================================
+// UTILIDADES DB Y SECUENCIA
+// ==========================================
+function saveSetting(key, value) {
+    const tx = db.transaction("settings", "readwrite");
+    tx.objectStore("settings").put({ key, value });
+}
+function loadSetting(key, defaultVal) {
+    return new Promise(resolve => {
+        const tx = db.transaction("settings", "readonly");
+        const req = tx.objectStore("settings").get(key);
+        req.onsuccess = () => resolve(req.result ? req.result.value : defaultVal);
+    });
+}
+async function updateNextQuoteCode() {
+    let seq = await loadSetting("seq", MIN_SEQ);
+    seq = Math.max(seq, MIN_SEQ); // Asegurar que sea al menos 400
+    
+    const client = (document.getElementById('clientName').value || 'CLIE').substring(0,4).toUpperCase();
+    document.getElementById('quoteNumber').innerText = `COT-${String(seq).padStart(4, '0')}-${client}`;
+}
+document.getElementById('clientName').addEventListener('input', updateNextQuoteCode);
 
-  const fechaFormato = formatDateES(quote.quoteDate);
-  const validaFormato = formatDateES(quote.validUntil);
-
-  const header = [
-    ["COTIZACIÓN", quote.code],
-    ["Fecha", fechaFormato],
-    ["Válida hasta", validaFormato],
-    ["Cliente", quote.clientName],
-    ["Empresa", quote.clientCompany],
-    ["RUT", quote.clientRut],
-    ["Email", quote.clientEmail],
-    ["Teléfono", quote.clientPhone],
-    ["Dirección", quote.clientAddress],
-    ["Ciudad", quote.clientCity],
-    ["Moneda", quote.currency],
-    ["Estado", quote.state],
-    ["Observaciones", quote.notes],
-    [],
-    ["Cantidad","Unidad","Descripción","Costo","Margen %","Precio Unit","Total Línea"]
-  ];
-
-  const isCLP = quote.currency === "CLP";
-  const lines = quote.lines.map(l => {
-    const cost = isCLP ? Math.round(l.cost) : l.cost;
-    const unitPrice = isCLP ? Math.round(l.unitPrice) : l.unitPrice;
-    const totalLine = isCLP ? Math.round((l.qty || 0) * unitPrice) : (l.qty || 0) * unitPrice;
-    return [l.qty, l.unitType || "UN", l.name, cost, l.marginPct, unitPrice, totalLine];
-  });
-
-  const totals = [
-    [],
-    ["SUBTOTAL", isCLP ? Math.round(quote.totals.sub) : quote.totals.sub],
-    ["IVA 19", isCLP ? Math.round(quote.totals.iva) : quote.totals.iva],
-    ["TOTAL", isCLP ? Math.round(quote.totals.tot) : quote.totals.tot]
-  ];
-
-  const ws = XLSX.utils.aoa_to_sheet([...header, ...lines, ...totals]);
-  XLSX.utils.book_append_sheet(wb, ws, "Cotizacion");
-
-  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+// ==========================================
+// LÓGICA DE LÍNEAS Y CÁLCULOS
+// ==========================================
+function addLine(data = {}) {
+    lines.push({
+        id: Date.now() + Math.random(),
+        desc: data.name || '',
+        qty: data.qty || 1,
+        unit: data.unitType || 'und',
+        cost: data.cost || 0,
+        margin: data.marginPct || 30
+    });
+    renderLines();
 }
 
-// Historial
-async function refreshHistory() {
-  const all = await listQuotes();
-  const term = (elqSearch.value || "").toLowerCase().trim();
+function updateLine(id, field, value) {
+    const line = lines.find(l => l.id === id);
+    if(line) {
+        line[field] = parseFloat(value) || value;
+        renderLines();
+    }
+}
 
-  const rows = all
-    .slice()
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
-    .filter(q => {
-      if (!term) return true;
-      const hay = [q.code, q.clientName, q.clientRut, q.clientCompany].join(" ").toLowerCase();
-      return hay.includes(term);
+function removeLine(id) {
+    lines = lines.filter(l => l.id !== id);
+    renderLines();
+}
+
+function renderLines() {
+    const tbody = document.getElementById('linesBody');
+    tbody.innerHTML = '';
+    const currency = document.getElementById('currency').value;
+    const rate = parseFloat(document.getElementById('exchangeRate').value) || 1;
+
+    let subtotal = 0;
+
+    lines.forEach(l => {
+        // Cálculo de precio de venta en CLP
+        let costoFinalCLP = currency === 'USD' ? (l.cost * rate) : l.cost;
+        let precioVentaCLP = costoFinalCLP * (1 + (l.margin / 100));
+        let totalLineaCLP = precioVentaCLP * l.qty;
+        subtotal += totalLineaCLP;
+
+        tbody.innerHTML += `
+            <tr class="border-b bg-white">
+                <td class="p-1"><input type="text" value="${l.desc}" onchange="updateLine(${l.id}, 'desc', this.value)" class="w-full border p-1 rounded"></td>
+                <td class="p-1"><input type="number" value="${l.qty}" onchange="updateLine(${l.id}, 'qty', this.value)" class="w-full border p-1 rounded"></td>
+                <td class="p-1"><input type="text" value="${l.unit}" onchange="updateLine(${l.id}, 'unit', this.value)" class="w-full border p-1 rounded"></td>
+                <td class="p-1"><input type="number" value="${l.cost}" onchange="updateLine(${l.id}, 'cost', this.value)" class="w-full border p-1 rounded"></td>
+                <td class="p-1"><input type="number" value="${l.margin}" onchange="updateLine(${l.id}, 'margin', this.value)" class="w-full border p-1 rounded"></td>
+                <td class="p-1 text-right font-bold font-mono">$${Math.round(precioVentaCLP).toLocaleString('es-CL')}</td>
+                <td class="p-1 text-right font-bold text-orange-600 font-mono">$${Math.round(totalLineaCLP).toLocaleString('es-CL')}</td>
+                <td class="p-1 text-center"><button onclick="removeLine(${l.id})" class="text-red-500 font-bold">X</button></td>
+            </tr>
+        `;
     });
 
-  elhistTbody.innerHTML = rows.map(q => `
-    <tr>
-      <td>${q.code}</td>
-      <td>${formatDateES(q.quoteDate)}</td>
-      <td>${q.clientName || ""}</td>
-      <td>${q.currency}</td>
-      <td class="rightAlign">${money(q.totals?.tot || 0, q.currency)}</td>
-      <td>${q.state || ""}</td>
-      <td>
-        <button class="btn btnW" data-edit="${q.id}" type="button">Editar</button>
-        <button class="btn btnD" data-del="${q.id}" type="button">Eliminar</button>
-        <button class="btn btnS" data-pdf="${q.id}" type="button">PDF</button>
-        <button class="btn btnS" data-xlsx="${q.id}" type="button">Excel</button>
-      </td>
-    </tr>
-  `).join("");
+    // Actualizar Totales
+    const iva = subtotal * 0.19;
+    const total = subtotal + iva;
 
-  elhistTbody.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", async () => {
-    await loadForEdit(b.getAttribute("data-edit"));
-  }));
-
-  elhistTbody.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => {
-    const id = b.getAttribute("data-del");
-    if (!confirm("¿Eliminar cotización?")) return;
-    await deleteQuote(id);
-    await refreshHistory();
-  }));
-
-  elhistTbody.querySelectorAll("[data-pdf]").forEach(b => b.addEventListener("click", async () => {
-    const q = await getQuote(b.getAttribute("data-pdf"));
-    if (!q) return;
-    const pdfBlob = await makePDFBlob(q);
-    downloadBlob(pdfBlob, `${q.code}.pdf`);
-  }));
-
-  elhistTbody.querySelectorAll("[data-xlsx]").forEach(b => b.addEventListener("click", async () => {
-    const q = await getQuote(b.getAttribute("data-xlsx"));
-    if (!q) return;
-    const xlsxBlob = await makeXLSXBlob(q);
-    downloadBlob(xlsxBlob, `${q.code}.xlsx`);
-  }));
+    document.getElementById('subtotalText').innerText = `$${Math.round(subtotal).toLocaleString('es-CL')}`;
+    document.getElementById('ivaText').innerText = `$${Math.round(iva).toLocaleString('es-CL')}`;
+    document.getElementById('totalText').innerText = `$${Math.round(total).toLocaleString('es-CL')}`;
 }
 
-async function loadForEdit(id) {
-  const q = await getQuote(id);
-  if (!q) return alert("No encontrada");
+document.getElementById('btnAddLine').addEventListener('click', () => addLine());
+document.getElementById('currency').addEventListener('change', renderLines);
+document.getElementById('exchangeRate').addEventListener('input', (e) => {
+    saveSetting('exchangeRate', e.target.value);
+    renderLines();
+});
 
-  editingId = q.id;
-  elpillEditing.textContent = "Modo: Editar";
+// ==========================================
+// CARGA MASIVA EXCEL (EL NUEVO BOTÓN)
+// ==========================================
+document.getElementById('btnBulkUpload').addEventListener('click', () => document.getElementById('bulkUpload').click());
 
-  elcurrency.value = q.currency || "CLP";
-  elusdRate.value = q.usdRate ?? 950;
-  elstate.value = q.state || "Pendiente";
-  elquoteDate.value = q.quoteDate || todayISO();
-  elvalidUntil.value = q.validUntil || plusDaysISO(5);
-  elnextContact.value = q.nextContact || "";
-
-  elclientName.value = q.clientName || "";
-  elclientCompany.value = q.clientCompany || "";
-  elclientRut.value = q.clientRut || "";
-  elclientEmail.value = q.clientEmail || "";
-  elclientPhone.value = q.clientPhone || "";
-  elclientAddress.value = q.clientAddress || "";
-  elclientCity.value = q.clientCity || "";
-  elnotes.value = q.notes || "";
-
-  ellinesTbody.innerHTML = "";
-  (q.lines || []).forEach(l => {
-    const cost = parseNum(l.cost);
-    const marginPct = l.marginPct != null ? parseNum(l.marginPct) : (l.unitPrice != null ? marginPctFromCostAndPrice(cost, l.unitPrice) : 15);
-    let unitPrice = unitPriceFromCostAndMargin(cost, marginPct);
-    if (q.currency === "CLP") unitPrice = Math.round(unitPrice);
-    addLine({ qty: l.qty ?? 0, unitType: l.unitType ?? "UN", name: l.name ?? "", cost, marginPct, unitPrice });
-  });
-
-  elpillQuoteNo.textContent = q.code;
-  refreshLineTotals();
-  renderTotals();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-async function resetForm() {
-  editingId = null;
-  elpillEditing.textContent = "Modo: Nueva";
-
-  elcurrency.value = "CLP";
-  elstate.value = "Pendiente";
-  elquoteDate.value = todayISO();
-  elvalidUntil.value = plusDaysISO(5);
-  elnextContact.value = "";
-
-  elclientName.value = "";
-  elclientCompany.value = "";
-  elclientRut.value = "";
-  elclientEmail.value = "";
-  elclientPhone.value = "";
-  elclientAddress.value = "";
-  elclientCity.value = "";
-  elnotes.value = "";
-
-  ellinesTbody.innerHTML = "";
-  addLine({ unitType: "UN", marginPct: 15 });
-
-  let seq = await getSetting("seq", MIN_SEQ);
-  seq = Math.max(Number(seq || 0), MIN_SEQ);
-  elpillQuoteNo.textContent = `COT-${String(seq).padStart(4, "0")}-XXXX`;
-
-  refreshLineTotals();
-  renderTotals();
-}
-
-async function handleSave() {
-  const f = readForm();
-  if (!f.clientName) return alert("Falta Cliente (nombre).");
-  if (!f.lines.length) return alert("Agrega al menos 1 línea.");
-
-  const totals = calc(f.lines);
-
-  let seq, code, createdAt;
-  if (editingId) {
-    const prev = await getQuote(editingId);
-    if (!prev) return alert("No se encontró la cotización a editar.");
-    seq = prev.seq;
-    code = prev.code;
-    createdAt = prev.createdAt;
-  } else {
-    const nx = await nextQuoteCode(f.clientName);
-    seq = nx.seq;
-    code = nx.code;
-    createdAt = new Date().toISOString();
-  }
-
-  const now = new Date().toISOString();
-  const quote = {
-    id: editingId || crypto.randomUUID(),
-    seq,
-    code,
-    createdAt,
-    updatedAt: now,
-    ...f,
-    totals
-  };
-
-  await putQuote(quote);
-
-  if (!editingId) {
-    await setSetting("seq", seq + 1);
-  }
-
-  elpillQuoteNo.textContent = code;
-
-  // Descargas opcionales
-  const jsonBlob = new Blob([JSON.stringify(quote, null, 2)], { type: "application/json" });
-  downloadBlob(jsonBlob, `${code}.json`);
-
-  if (f.optMakePDF) {
-    const pdfBlob = await makePDFBlob(quote);
-    downloadBlob(pdfBlob, `${code}.pdf`);
-  }
-  if (f.optMakeExcel) {
-    const xlsxBlob = await makeXLSXBlob(quote);
-    downloadBlob(xlsxBlob, `${code}.xlsx`);
-  }
-
-  await refreshHistory();
-  alert(editingId ? "Cotización actualizada." : "Cotización guardada.");
-
-  if (!editingId) await resetForm();
-}
-
-async function exportDB() {
-  const quotes = await listQuotes();
-
-  const json = new Blob([JSON.stringify(quotes, null, 2)], { type: "application/json" });
-  downloadBlob(json, "BaseDatos-DMYC.json");
-
-  const XLSX = window.XLSX;
-  const wb = XLSX.utils.book_new();
-
-  const rows = quotes
-    .slice()
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
-    .map(q => ({
-      codigo: q.code,
-      fecha: formatDateES(q.quoteDate),
-      valida_hasta: formatDateES(q.validUntil),
-      proximo_contacto: q.nextContact ? formatDateES(q.nextContact) : "",
-      estado: q.state,
-      moneda: q.currency,
-      subtotal: q.totals?.sub ?? 0,
-      iva19: q.totals?.iva ?? 0,
-      total: q.totals?.tot ?? 0,
-      cliente: q.clientName,
-      empresa: q.clientCompany,
-      rut: q.clientRut,
-      email: q.clientEmail,
-      telefono: q.clientPhone,
-      direccion: q.clientAddress,
-      ciudad: q.clientCity,
-      observaciones: q.notes
-    }));
-
-  const ws = XLSX.utils.json_to_sheet(rows);
-  XLSX.utils.book_append_sheet(wb, ws, "Cotizaciones");
-
-  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  const xlsx = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  downloadBlob(xlsx, "BaseDatos-DMYC.xlsx");
-
-  alert("Exportación lista: JSON + Excel.");
-}
-
-async function importDB() {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "application/json,.json";
-
-  input.onchange = async () => {
-    const file = input.files?.[0];
+document.getElementById('bulkUpload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
     if (!file) return;
 
-    const text = await file.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      return alert("JSON inválido.");
-    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const excelData = XLSX.utils.sheet_to_json(worksheet, { defval: "" }); // defval evita celdas vacias nulas
 
-    if (!Array.isArray(data)) return alert("El archivo debe contener un arreglo de cotizaciones.");
-    if (!confirm("Esto reemplazará tu base de datos local. ¿Continuar?")) return;
+        let cargados = 0;
+        excelData.forEach(row => {
+            // Usa las columnas exactas del archivo que te envié
+            const descripcion = row.descripcion || row.Descripcion || '';
+            const cantidad = parseFloat(row.cantidad) || parseFloat(row.Cantidad) || 0;
+            const unidad = row.unidad || row.Unidad || 'und';
+            const costo = parseFloat(row.costo) || parseFloat(row.Costo) || 0;
+            const margen = parseFloat(row.margen_pct) || parseFloat(row.Margen_pct) || 30;
 
-    await replaceAllQuotes(data);
+            if (descripcion && cantidad > 0 && costo > 0) {
+                lines.push({
+                    id: Date.now() + Math.random(),
+                    desc: descripcion,
+                    qty: cantidad,
+                    unit: unidad,
+                    cost: costo,
+                    margin: margen
+                });
+                cargados++;
+            }
+        });
 
-    const maxSeq = data.reduce((m, q) => Math.max(m, Number(q.seq || 0)), 0);
-    await setSetting("seq", Math.max(maxSeq + 1, MIN_SEQ));
+        document.getElementById('bulkUpload').value = ""; // Reset
+        renderLines();
+        alert(`¡Éxito! Se cargaron ${cargados} materiales desde el Excel.`);
+    };
+    reader.readAsArrayBuffer(file);
+});
 
-    await refreshHistory();
-    await resetForm();
-    alert("Importación completada.");
-  };
+// ==========================================
+// GUARDAR Y GENERAR PDF
+// ==========================================
+document.getElementById('btnSave').addEventListener('click', async () => {
+    const qNum = document.getElementById('quoteNumber').innerText;
+    const client = document.getElementById('clientName').value;
+    if(!client) return alert('Debes ingresar al menos el nombre del cliente.');
+    if(lines.length === 0 || !lines[0].desc) return alert('Debes agregar al menos un material.');
 
-  input.click();
-}
+    // Datos cotización
+    const quote = {
+        id: qNum,
+        date: new Date().toLocaleDateString('es-CL'),
+        client,
+        rut: document.getElementById('clientRut').value,
+        address: document.getElementById('clientAddress').value,
+        phone: document.getElementById('clientPhone').value,
+        email: document.getElementById('clientEmail').value,
+        status: document.getElementById('quoteStatus').value,
+        notes: document.getElementById('notes').value,
+        currency: document.getElementById('currency').value,
+        rate: document.getElementById('exchangeRate').value,
+        lines: lines,
+        subtotal: parseFloat(document.getElementById('subtotalText').innerText.replace(/\D/g, '')),
+        iva: parseFloat(document.getElementById('ivaText').innerText.replace(/\D/g, '')),
+        total: parseFloat(document.getElementById('totalText').innerText.replace(/\D/g, '')),
+        synced: false
+    };
 
-async function init() {
-  const updateStatus = () => {
-    elstatusLine.textContent = navigator.onLine
-      ? "Online (sin nube; guardando local)"
-      : "Offline (guardando local)";
-  };
+    // Guardar en DB local
+    const tx = db.transaction("quotes", "readwrite");
+    tx.objectStore("quotes").put(quote);
 
-  window.addEventListener("online", updateStatus);
-  window.addEventListener("offline", updateStatus);
-  updateStatus();
+    // Subir correlativo
+    let seq = await loadSetting("seq", MIN_SEQ);
+    await saveSetting("seq", Math.max(seq, MIN_SEQ) + 1);
+    await updateNextQuoteCode();
 
-  // PWA install prompt (Chrome/Edge)
-  let deferredPrompt = null;
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    if (elbtnInstall) elbtnInstall.style.display = "inline-block";
-  });
+    // Generar PDF
+    generatePDF(quote);
+    
+    alert('Cotización guardada exitosamente.');
+});
 
-  if (elbtnInstall) {
-    elbtnInstall.addEventListener("click", async () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      deferredPrompt = null;
-      elbtnInstall.style.display = "none";
+function generatePDF(q) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setTextColor(255, 102, 0); // Naranja DMYC
+    doc.setFontSize(22);
+    doc.text("DMYC", 14, 20);
+    
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(10);
+    doc.text("Distribución de Materiales y Construcción", 14, 26);
+    doc.text("RUT: 76.935.323-2", 14, 31);
+    doc.text("Vendedor: Felipe Mesa", 14, 36);
+
+    // Quote Info (Derecha)
+    doc.setFontSize(12);
+    doc.text(`Cotización N°: ${q.id}`, 140, 20);
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${q.date}`, 140, 26);
+    doc.text(`Moneda Costos: ${q.currency} (Cambio: $${q.rate})`, 140, 31);
+
+    // Cliente box
+    doc.setDrawColor(200);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(14, 45, 182, 30, 'FD');
+    doc.text(`Cliente: ${q.client}`, 18, 52);
+    doc.text(`RUT: ${q.rut}`, 120, 52);
+    doc.text(`Dirección: ${q.address}`, 18, 60);
+    doc.text(`Teléfono: ${q.phone}`, 120, 60);
+    doc.text(`Email: ${q.email}`, 18, 68);
+
+    // Tabla Productos
+    const rate = parseFloat(q.rate) || 1;
+    const tableData = q.lines.map(l => {
+        let costCLP = q.currency === 'USD' ? (l.cost * rate) : l.cost;
+        let pVenta = costCLP * (1 + (l.margin / 100));
+        return [
+            l.desc,
+            l.qty,
+            l.unit,
+            `$${Math.round(pVenta).toLocaleString('es-CL')}`,
+            `$${Math.round(pVenta * l.qty).toLocaleString('es-CL')}`
+        ];
     });
-  }
 
-  // Defaults
-  elpillIva.textContent = "IVA: 19%";
-  elquoteDate.value = todayISO();
-  elvalidUntil.value = plusDaysISO(5);
+    doc.autoTable({
+        startY: 85,
+        head: [['Descripción', 'Cant.', 'Unid.', 'Precio Unit. (CLP)', 'Total (CLP)']],
+        body: tableData,
+        headStyles: { fillColor: [50, 50, 50] },
+        theme: 'striped'
+    });
 
-  // Listeners
-  elbtnAddLine.addEventListener("click", () => addLine({ unitType: "UN", marginPct: 15 }));
-  elbtnSave.addEventListener("click", handleSave);
-  elbtnNew.addEventListener("click", resetForm);
-  elbtnRefresh.addEventListener("click", refreshHistory);
-  elqSearch.addEventListener("input", refreshHistory);
+    // Totales
+    let finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(11);
+    doc.text(`Subtotal Neto: $${q.subtotal.toLocaleString('es-CL')}`, 140, finalY);
+    doc.text(`IVA (19%): $${q.iva.toLocaleString('es-CL')}`, 140, finalY + 7);
+    doc.setFontSize(14);
+    doc.setTextColor(255, 102, 0);
+    doc.text(`TOTAL FINAL: $${q.total.toLocaleString('es-CL')}`, 140, finalY + 15);
 
-  elcurrency.addEventListener("change", () => {
-    refreshLineTotals();
-    renderTotals();
-  });
+    // Observaciones
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(10);
+    doc.text("Condiciones / Observaciones:", 14, finalY);
+    doc.setFontSize(9);
+    doc.text(doc.splitTextToSize(q.notes, 100), 14, finalY + 6);
 
-  elbtnExportDB.addEventListener("click", exportDB);
-  elbtnImportDB.addEventListener("click", importDB);
-
-  // SW
-  if ("serviceWorker" in navigator) {
-    try { await navigator.serviceWorker.register("./sw.js"); } catch {}
-  }
-
-  await resetForm();
-  await refreshHistory();
+    // Descargar
+    doc.save(`${q.id}.pdf`);
 }
 
-init();
+// ==========================================
+// HISTORIAL Y SINCRONIZACIÓN
+// ==========================================
+document.getElementById('btnViewHistory').addEventListener('click', () => {
+    document.getElementById('newQuoteView').classList.add('hidden');
+    document.getElementById('historyView').classList.remove('hidden');
+    loadHistory();
+});
+
+document.getElementById('btnBackToNew').addEventListener('click', () => {
+    document.getElementById('historyView').classList.add('hidden');
+    document.getElementById('newQuoteView').classList.remove('hidden');
+});
+
+function loadHistory() {
+    const tx = db.transaction("quotes", "readonly");
+    const req = tx.objectStore("quotes").getAll();
+    req.onsuccess = () => {
+        const tbody = document.getElementById('historyBody');
+        tbody.innerHTML = '';
+        const quotes = req.result.sort((a,b) => (a.id < b.id ? 1 : -1));
+        
+        quotes.forEach(q => {
+            tbody.innerHTML += `
+                <tr class="border-b text-center">
+                    <td class="p-2 font-bold text-orange-600">${q.id}</td>
+                    <td class="p-2">${q.date}</td>
+                    <td class="p-2 text-left">${q.client}</td>
+                    <td class="p-2 font-mono">$${q.total.toLocaleString('es-CL')}</td>
+                    <td class="p-2">${q.status}</td>
+                    <td class="p-2">
+                        <button onclick="downloadPdfHistory('${q.id}')" class="text-blue-500 hover:underline">PDF</button>
+                    </td>
+                </tr>
+            `;
+        });
+    };
+}
+
+// Volver a generar PDF desde historial
+window.downloadPdfHistory = function(id) {
+    const tx = db.transaction("quotes", "readonly");
+    const req = tx.objectStore("quotes").get(id);
+    req.onsuccess = () => {
+        if(req.result) generatePDF(req.result);
+    };
+};
+
+// Enviar al Notebook Local (Sincronizar)
+document.getElementById('btnSync').addEventListener('click', () => {
+    const tx = db.transaction("quotes", "readonly");
+    const req = tx.objectStore("quotes").getAll();
+    req.onsuccess = async () => {
+        const unSynced = req.result.filter(q => !q.synced);
+        if(unSynced.length === 0) return alert("Todo está sincronizado.");
+        
+        try {
+            // Cambia localhost por la IP de tu Notebook si usas el iPad
+            const res = await fetch('http://localhost:8787/api/push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(unSynced)
+            });
+            if(res.ok) {
+                alert(`¡Se sincronizaron ${unSynced.length} cotizaciones con tu PC!`);
+                // Marcar como synced localmente
+                const txWrite = db.transaction("quotes", "readwrite");
+                unSynced.forEach(q => {
+                    q.synced = true;
+                    txWrite.objectStore("quotes").put(q);
+                });
+            }
+        } catch (err) {
+            alert("No se pudo conectar al servidor. Asegúrate de que el notebook esté encendido, el script server.js corriendo y conectados a la misma red.");
+        }
+    };
+});
