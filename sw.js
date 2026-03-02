@@ -1,37 +1,47 @@
-const CACHE = "dmyc-cotizaciones-local-v7";
+const CACHE_NAME = 'dmyc-cache-v1';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/app.js',
+  '/manifest.webmanifest',
+  'https://cdn.tailwindcss.com',
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js'
+];
 
-self.addEventListener("install", (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll([
-      "./",
-      "./index.html",
-      "./app.js",
-      "./db.js",
-      "./manifest.webmanifest",
-      "./DMYC_logotipo_Mesa-de-trabajo-1.jpg"
-    ]))
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        return cache.addAll(urlsToCache);
+      })
   );
 });
 
-self.addEventListener("activate", (e) => {
-  e.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.map(k => (k !== CACHE ? caches.delete(k) : Promise.resolve())));
-    await self.clients.claim();
-  })());
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        if (response) {
+          return response; // Devuelve la versión guardada offline
+        }
+        return fetch(event.request); // Si no está guardada, la busca en internet
+      })
+  );
 });
 
-self.addEventListener("fetch", (e) => {
-  e.respondWith((async () => {
-    const cached = await caches.match(e.request, { ignoreSearch: true });
-    if (cached) return cached;
-    try {
-      const res = await fetch(e.request);
-      const cache = await caches.open(CACHE);
-      cache.put(e.request, res.clone());
-      return res;
-    } catch {
-      return cached || new Response("Offline", { status: 503 });
-    }
-  })());
+self.addEventListener('activate', event => {
+  const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            return caches.delete(cacheName); // Borra versiones antiguas
+          }
+        })
+      );
+    })
+  );
 });
