@@ -14,10 +14,9 @@ async function initApp() {
     await updateNextQuoteCode();
     const rate = await loadSetting('exchangeRate', 950);
     document.getElementById('exchangeRate').value = rate;
-    addLine(); // Línea vacía por defecto
+    addLine();
 }
 
-// Utilidades IndexedDB
 function saveSetting(key, value) {
     db.transaction("settings", "readwrite").objectStore("settings").put({ key, value });
 }
@@ -39,7 +38,7 @@ document.getElementById('clientName').addEventListener('input', updateNextQuoteC
 function addLine(data = {}) {
     lines.push({
         id: Date.now() + Math.random(), desc: data.name || '', qty: data.qty || 1,
-        unit: data.unitType || 'und', cost: data.cost || 0, margin: data.marginPct || 30
+        unit: data.unitType || 'UN', cost: data.cost || 0, margin: data.marginPct || 30
     });
     renderLines();
 }
@@ -110,7 +109,7 @@ document.getElementById('bulkUpload').addEventListener('change', function(e) {
             if (desc && qty > 0 && cost > 0) {
                 lines.push({
                     id: Date.now() + Math.random(), desc: desc, qty: qty,
-                    unit: row.unidad || row.Unidad || 'und', cost: cost,
+                    unit: row.unidad || row.Unidad || 'UN', cost: cost,
                     margin: parseFloat(row.margen_pct) || parseFloat(row.Margen_pct) || 30
                 });
                 count++;
@@ -129,15 +128,33 @@ document.getElementById('btnSave').addEventListener('click', async () => {
     const client = document.getElementById('clientName').value;
     if(!client) return alert('Debes ingresar el nombre del cliente.');
 
+    // Calcular fecha válida (+5 días)
+    const hoy = new Date();
+    const formatoFecha = { day: 'numeric', month: 'long', year: 'numeric' };
+    const dateStr = hoy.toLocaleDateString('es-CL', formatoFecha);
+    
+    const fechaValida = new Date(hoy);
+    fechaValida.setDate(fechaValida.getDate() + 5);
+    const validDateStr = fechaValida.toLocaleDateString('es-CL', formatoFecha);
+
     const quote = {
-        id: qNum, date: new Date().toLocaleDateString('es-CL'), client,
-        rut: document.getElementById('clientRut').value, address: document.getElementById('clientAddress').value,
-        phone: document.getElementById('clientPhone').value, email: document.getElementById('clientEmail').value,
-        status: document.getElementById('quoteStatus').value, notes: document.getElementById('notes').value,
-        currency: document.getElementById('currency').value, rate: document.getElementById('exchangeRate').value,
-        lines, subtotal: parseFloat(document.getElementById('subtotalText').innerText.replace(/\D/g, '')),
+        id: qNum, 
+        date: dateStr, 
+        validDate: validDateStr,
+        client,
+        rut: document.getElementById('clientRut').value, 
+        address: document.getElementById('clientAddress').value,
+        phone: document.getElementById('clientPhone').value, 
+        email: document.getElementById('clientEmail').value,
+        status: document.getElementById('quoteStatus').value, 
+        notes: document.getElementById('notes').value,
+        currency: document.getElementById('currency').value, 
+        rate: document.getElementById('exchangeRate').value,
+        lines, 
+        subtotal: parseFloat(document.getElementById('subtotalText').innerText.replace(/\D/g, '')),
         iva: parseFloat(document.getElementById('ivaText').innerText.replace(/\D/g, '')),
-        total: parseFloat(document.getElementById('totalText').innerText.replace(/\D/g, '')), synced: false
+        total: parseFloat(document.getElementById('totalText').innerText.replace(/\D/g, '')), 
+        synced: false
     };
 
     db.transaction("quotes", "readwrite").objectStore("quotes").put(quote);
@@ -151,60 +168,130 @@ function generatePDF(q) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     
-    // Encabezado DMYC
-    doc.setTextColor(255, 102, 0); doc.setFontSize(22); doc.text("DMYC", 14, 20);
-    doc.setTextColor(50, 50, 50); doc.setFontSize(10);
-    doc.text("Distribución de Materiales y Construcción", 14, 26);
-    doc.text("RUT: 76.935.323-2 | Vendedor: Felipe Mesa", 14, 31);
+    // FORMATO IDÉNTICO AL PDF ADJUNTO
     
-    doc.setFontSize(12); doc.text(`Cotización N°: ${q.id}`, 140, 20);
-    doc.setFontSize(10); doc.text(`Fecha: ${q.date}`, 140, 26);
-    doc.text(`Moneda: ${q.currency} (Cambio: $${q.rate})`, 140, 31);
+    // --- CABECERA IZQUIERDA ---
+    doc.setTextColor(0, 0, 0); 
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18); 
+    doc.text("DMYC spa", 14, 20);
+    
+    doc.setFontSize(10);
+    doc.text("76.935.323-2", 14, 25);
+    doc.setFont("helvetica", "normal");
+    doc.text("Cerro el plomo 5931 of 1213, Las Condes", 14, 30);
+    doc.text("Región Metropolitana", 14, 35);
 
-    // Datos del Cliente
-    doc.setFillColor(245, 245, 245); doc.rect(14, 40, 182, 25, 'F');
-    doc.text(`Cliente: ${q.client}`, 18, 47); doc.text(`RUT: ${q.rut}`, 120, 47);
-    doc.text(`Dirección: ${q.address}`, 18, 55); doc.text(`Teléfono: ${q.phone}`, 120, 55);
+    // --- CABECERA DERECHA ---
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("COTIZACIÓN N°", 130, 20);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.id, 165, 20);
+    
+    doc.setFont("helvetica", "bold");
+    doc.text("FECHA", 130, 25);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.date, 150, 25);
+    
+    doc.setFont("helvetica", "bold");
+    doc.text("PRESUPUESTO", 130, 30);
+    doc.text("VÁLIDO HASTA", 130, 34);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.validDate || q.date, 160, 34);
 
-    // Tabla Productos
+    // --- PRESUPUESTO PARA (CLIENTE) ---
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("PRESUPUESTO PARA", 14, 50);
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("Contacto", 14, 58);     doc.text(q.client, 40, 58);
+    doc.text("Empresa", 14, 63);      doc.text("dmyc spa", 40, 63); // Según tu ejemplo
+    doc.text("Rut", 14, 68);          doc.text(q.rut || "-", 40, 68);
+    doc.text("Dirección", 14, 73);    doc.text(q.address || "-", 40, 73);
+    doc.text("Ciudad", 14, 78);       doc.text("santiago", 40, 78);
+    doc.text("Teléfono", 14, 83);     doc.text(q.phone || "-", 40, 83);
+    doc.text("Email", 14, 88);        doc.text(q.email || "-", 40, 88);
+
+    // --- VENDEDOR Y TÉRMINOS ---
+    doc.setFont("helvetica", "bold");
+    doc.text("AUTOR", 14, 100);       doc.text("VENDEDOR", 60, 100);      doc.text("TÉRMINOS", 110, 100);
+    doc.setFont("helvetica", "normal");
+    doc.text("FMC", 14, 105);         doc.text("FMC", 60, 105);           doc.text("Pago Transferencia", 110, 105);
+
+    // --- LÍNEA SEPARADORA ---
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.5);
+    doc.line(14, 110, 196, 110);
+
+    // --- TABLA PRODUCTOS ---
     const rate = parseFloat(q.rate) || 1;
     const tableData = q.lines.map(l => {
         let pVenta = (q.currency === 'USD' ? l.cost * rate : l.cost) * (1 + (l.margin/100));
-        return [l.desc, l.qty, l.unit, `$${Math.round(pVenta).toLocaleString('es-CL')}`, `$${Math.round(pVenta * l.qty).toLocaleString('es-CL')}`];
+        return [
+            l.qty, 
+            l.desc, 
+            Math.round(pVenta).toLocaleString('es-CL'), 
+            l.unit, 
+            Math.round(pVenta * l.qty).toLocaleString('es-CL')
+        ];
     });
 
     doc.autoTable({
-        startY: 75,
-        head: [['Descripción', 'Cant.', 'Unid.', 'Precio Unit. (CLP)', 'Total (CLP)']],
-        body: tableData, headStyles: { fillColor: [50, 50, 50] }
+        startY: 115,
+        head: [['CANTIDAD', 'DESCRIPCIÓN', 'PRECIO POR UNIDAD', 'UNIDAD', 'TOTAL']],
+        body: tableData,
+        theme: 'plain', // Sin colores de fondo como en tu PDF
+        headStyles: { fontStyle: 'bold', textColor: [0,0,0] },
+        styles: { textColor: [0,0,0], cellPadding: 2 },
+        columnStyles: {
+            0: { halign: 'center' },
+            2: { halign: 'center' },
+            3: { halign: 'center' },
+            4: { halign: 'right' }
+        }
     });
 
+    // --- TOTALES (A la derecha, sin signos de peso) ---
     let finalY = doc.lastAutoTable.finalY + 10;
     
-    // Totales
-    doc.text(`Subtotal Neto: $${q.subtotal.toLocaleString('es-CL')}`, 140, finalY);
-    doc.text(`IVA (19%): $${q.iva.toLocaleString('es-CL')}`, 140, finalY + 7);
-    doc.setFontSize(14); doc.setTextColor(255, 102, 0);
-    doc.text(`TOTAL FINAL: $${q.total.toLocaleString('es-CL')}`, 140, finalY + 15);
+    doc.setFont("helvetica", "bold");
+    doc.text("SUBTOTAL", 140, finalY);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.subtotal.toLocaleString('es-CL'), 196, finalY, { align: "right" });
     
-    // Observaciones y Datos de Transferencia
-    doc.setTextColor(50, 50, 50); doc.setFontSize(10);
-    doc.text("Condiciones / Observaciones:", 14, finalY);
+    doc.setFont("helvetica", "bold");
+    doc.text("MONTO IVA 19%", 140, finalY + 6);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.iva.toLocaleString('es-CL'), 196, finalY + 6, { align: "right" });
+    
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL", 140, finalY + 12);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.total.toLocaleString('es-CL'), 196, finalY + 12, { align: "right" });
+
+    // --- OBSERVACIONES Y TRANSFERENCIA ---
+    doc.setFont("helvetica", "bold");
+    doc.text("OBS:", 14, finalY + 25);
+    doc.setFont("helvetica", "normal");
+    doc.text(doc.splitTextToSize(q.notes, 170), 25, finalY + 25);
+
+    // Texto final centrado
+    let textY = finalY + 50;
     doc.setFontSize(9);
-    doc.text(doc.splitTextToSize(q.notes, 100), 14, finalY + 5);
+    doc.text("Si tiene cualquier tipo de pregunta acerca de esta oferta, póngase en contacto", 105, textY, { align: "center" });
+    doc.text("indicando número de cotización.", 105, textY + 4, { align: "center" });
+
+    doc.setFont("helvetica", "bold");
+    doc.text("TRANSFERENCIA", 105, textY + 12, { align: "center" });
+    doc.text("DMYC Spa", 105, textY + 16, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.text("Banco BCI Cta. Cte. 95148019", 105, textY + 20, { align: "center" });
+    doc.text("INFO@DMYC.CL", 105, textY + 24, { align: "center" });
     
-    // Cuadro de Transferencia
-    let yTransfer = finalY + 25;
-    doc.setFillColor(240, 240, 240);
-    doc.rect(14, yTransfer - 5, 80, 32, 'F');
-    doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text("Datos de Transferencia:", 18, yTransfer);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-    doc.text("DMYC SPA", 18, yTransfer + 5);
-    doc.text("RUT: 76.935.323-2", 18, yTransfer + 10);
-    doc.text("Cuenta Corriente: 95148019", 18, yTransfer + 15);
-    doc.text("Banco Bci / Mach", 18, yTransfer + 20);
-    doc.text("Correo: info@dmyc.cl", 18, yTransfer + 25);
+    doc.setFont("helvetica", "bold");
+    doc.text("GRACIAS POR SU CONFIANZA!", 105, textY + 32, { align: "center" });
 
     doc.save(`${q.id}.pdf`);
 }
@@ -216,7 +303,7 @@ document.getElementById('btnViewHistory').addEventListener('click', () => {
     db.transaction("quotes").objectStore("quotes").getAll().onsuccess = (e) => {
         document.getElementById('historyBody').innerHTML = e.target.result.sort((a,b) => a.id < b.id ? 1 : -1).map(q => `
             <tr class="border-b text-center">
-                <td class="p-2 font-bold text-orange-600">${q.id}</td><td class="p-2">${q.date}</td>
+                <td class="p-2 font-bold text-gray-700">${q.id}</td><td class="p-2">${q.date}</td>
                 <td class="p-2 text-left">${q.client}</td><td class="p-2">$${q.total.toLocaleString('es-CL')}</td>
                 <td class="p-2">${q.status}</td>
                 <td class="p-2"><button onclick="downloadPdfHistory('${q.id}')" class="text-blue-500 hover:underline">Descargar PDF</button></td>
@@ -245,6 +332,6 @@ document.getElementById('btnSync').addEventListener('click', () => {
                 unSynced.forEach(q => { q.synced = true; txWrite.objectStore("quotes").put(q); });
                 alert("¡Sincronizado con PC exitosamente!");
             }
-        } catch { alert("Error conectando al PC. Asegúrate que server.js esté encendido."); }
+        } catch { alert("Error conectando al PC."); }
     };
 });
