@@ -200,17 +200,24 @@ function generatePDF(q) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     
+    // Función auxiliar para formatear la moneda
+    const formatMoney = (val) => {
+        if (q.currency === 'USD') {
+            return `US$ ${val.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+        return `$${Math.round(val).toLocaleString('es-CL')}`;
+    };
+    
     // --- CABECERA IZQUIERDA ---
-    doc.setTextColor(0, 0, 0); 
+    doc.setTextColor(27, 43, 65); // Azul oscuro corporativo
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(18); 
-    doc.text("DMYC spa", 14, 20);
+    doc.setFontSize(14); 
+    doc.text("DMYC spa 76.935.323-2", 14, 20); // Título grande
     
     doc.setFontSize(10);
-    doc.text("76.935.323-2", 14, 25);
     doc.setFont("helvetica", "normal");
-    doc.text("Cerro el plomo 5931 of 1213, Las Condes", 14, 30);
-    doc.text("Región Metropolitana", 14, 35);
+    doc.text("Cerro el plomo 5931 of 1213, Las Condes", 14, 26);
+    doc.text("Región Metropolitana", 14, 31);
 
     // --- CABECERA DERECHA ---
     doc.setFontSize(10);
@@ -220,108 +227,146 @@ function generatePDF(q) {
     doc.text(q.id, 165, 20);
     
     doc.setFont("helvetica", "bold");
-    doc.text("FECHA", 130, 25);
+    doc.text("FECHA", 130, 26);
     doc.setFont("helvetica", "normal");
-    doc.text(q.date, 150, 25);
+    doc.text(q.date, 160, 26);
     
     doc.setFont("helvetica", "bold");
-    doc.text("PRESUPUESTO", 130, 30);
-    doc.text("VÁLIDO HASTA", 130, 34);
+    doc.text("PRESUPUESTO", 130, 32);
+    doc.text("VÁLIDO HASTA", 130, 36);
     doc.setFont("helvetica", "normal");
-    doc.text(q.validDate || q.date, 160, 34);
+    doc.text(q.validDate || q.date, 160, 36);
 
     // --- PRESUPUESTO PARA (CLIENTE) ---
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
+    doc.setTextColor(27, 43, 65);
     doc.text("PRESUPUESTO PARA", 14, 50);
     
-    doc.setFont("helvetica", "normal");
-    doc.text("Contacto", 14, 58);     doc.text(q.client, 40, 58);
-    doc.text("Empresa", 14, 63);      doc.text("dmyc spa", 40, 63);
-    doc.text("Rut", 14, 68);          doc.text(q.rut || "-", 40, 68);
-    doc.text("Dirección", 14, 73);    doc.text(q.address || "-", 40, 73);
-    doc.text("Ciudad", 14, 78);       doc.text("santiago", 40, 78);
-    doc.text("Teléfono", 14, 83);     doc.text(q.phone || "-", 40, 83);
-    doc.text("Email", 14, 88);        doc.text(q.email || "-", 40, 88);
+    doc.setTextColor(0, 0, 0); // Negro para texto
+    doc.setFont("helvetica", "bold");
+    doc.text("Contacto", 14, 58);     doc.setFont("helvetica", "normal"); doc.text(q.client, 40, 58);
+    doc.setFont("helvetica", "bold");
+    doc.text("Empresa", 14, 63);      doc.setFont("helvetica", "normal"); doc.text("dmyc spa", 40, 63);
+    doc.setFont("helvetica", "bold");
+    doc.text("Rut", 14, 68);          doc.setFont("helvetica", "normal"); doc.text(q.rut || "-", 40, 68);
+    doc.setFont("helvetica", "bold");
+    doc.text("Dirección", 14, 73);    doc.setFont("helvetica", "normal"); doc.text(q.address || "-", 40, 73);
+    doc.setFont("helvetica", "bold");
+    doc.text("Ciudad", 14, 78);       doc.setFont("helvetica", "normal"); doc.text("Arica", 40, 78);
+    doc.setFont("helvetica", "bold");
+    doc.text("Teléfono", 14, 83);     doc.setFont("helvetica", "normal"); doc.text(q.phone || "-", 40, 83);
+    doc.setFont("helvetica", "bold");
+    doc.text("Email", 14, 88);        doc.setFont("helvetica", "normal"); doc.text(q.email || "-", 40, 88);
 
     // --- VENDEDOR Y TÉRMINOS ---
+    doc.setTextColor(27, 43, 65);
     doc.setFont("helvetica", "bold");
     doc.text("AUTOR", 14, 100);       doc.text("VENDEDOR", 60, 100);      doc.text("TÉRMINOS", 110, 100);
+    doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
     doc.text("FMC", 14, 105);         doc.text("FMC", 60, 105);           doc.text("Pago Transferencia", 110, 105);
 
-    // --- LÍNEA SEPARADORA ---
-    doc.setDrawColor(0);
-    doc.setLineWidth(0.5);
-    doc.line(14, 110, 196, 110);
-
     // --- TABLA PRODUCTOS ---
     const rate = parseFloat(q.rate) || 1;
+    let subtotalPDF = 0;
+
     const tableData = q.lines.map(l => {
-        let pVenta = (q.currency === 'USD' ? l.cost * rate : l.cost) * (1 + (l.margin/100));
+        let costoBase = q.currency === 'USD' ? l.cost : (l.cost * (q.currency === 'CLP' && q.costCurrency === 'USD' ? rate : 1));
+        let pVenta = costoBase * (1 + (l.margin/100));
+        let totalLinea = pVenta * l.qty;
+        subtotalPDF += totalLinea;
+
         return [
             l.qty, 
             l.desc, 
-            Math.round(pVenta).toLocaleString('es-CL'), 
+            formatMoney(pVenta), 
             l.unit, 
-            Math.round(pVenta * l.qty).toLocaleString('es-CL')
+            formatMoney(totalLinea)
         ];
     });
 
+    let ivaPDF = subtotalPDF * 0.19;
+    let totalFinalPDF = subtotalPDF + ivaPDF;
+
     doc.autoTable({
-        startY: 115,
+        startY: 112,
         head: [['CANTIDAD', 'DESCRIPCIÓN', 'PRECIO POR UNIDAD', 'UNIDAD', 'TOTAL']],
         body: tableData,
-        theme: 'plain',
-        headStyles: { fontStyle: 'bold', textColor: [0,0,0] },
-        styles: { textColor: [0,0,0], cellPadding: 2 },
+        theme: 'striped',
+        headStyles: { 
+            fillColor: [27, 43, 65], // Azul oscuro del encabezado tabla
+            textColor: [255, 255, 255], 
+            fontStyle: 'bold',
+            halign: 'center'
+        },
+        bodyStyles: { textColor: [0,0,0], cellPadding: 3 },
+        alternateRowStyles: { fillColor: [245, 245, 245] }, // Efecto cebra gris claro
         columnStyles: {
-            0: { halign: 'center' },
-            2: { halign: 'center' },
-            3: { halign: 'center' },
-            4: { halign: 'right' }
+            0: { halign: 'center', cellWidth: 25 },
+            1: { halign: 'left', cellWidth: 'auto' },
+            2: { halign: 'center', cellWidth: 40 },
+            3: { halign: 'center', cellWidth: 20 },
+            4: { halign: 'right', cellWidth: 35 }
         }
     });
 
-    // --- TOTALES ---
-    let finalY = doc.lastAutoTable.finalY + 10;
+    // --- TOTALES (Con fondo estilo factura) ---
+    let finalY = doc.lastAutoTable.finalY + 8;
+    
+    // Fondo gris para el recuadro de totales
+    doc.setFillColor(240, 240, 240);
+    doc.rect(125, finalY - 4, 75, 22, 'F');
+    
+    doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
-    doc.text("SUBTOTAL", 140, finalY);
+    doc.text("SUBTOTAL", 130, finalY);
     doc.setFont("helvetica", "normal");
-    doc.text(q.subtotal.toLocaleString('es-CL'), 196, finalY, { align: "right" });
+    doc.text(formatMoney(subtotalPDF), 195, finalY, { align: "right" });
     
     doc.setFont("helvetica", "bold");
-    doc.text("MONTO IVA 19%", 140, finalY + 6);
+    doc.text("MONTO IVA 19%", 130, finalY + 6);
     doc.setFont("helvetica", "normal");
-    doc.text(q.iva.toLocaleString('es-CL'), 196, finalY + 6, { align: "right" });
+    doc.text(formatMoney(ivaPDF), 195, finalY + 6, { align: "right" });
     
+    // Fondo azul oscuro para la fila de TOTAL FINAL
+    doc.setFillColor(27, 43, 65);
+    doc.rect(125, finalY + 10, 75, 8, 'F');
+    doc.setTextColor(255, 255, 255); // Letras blancas
     doc.setFont("helvetica", "bold");
-    doc.text("TOTAL", 140, finalY + 12);
-    doc.setFont("helvetica", "normal");
-    doc.text(q.total.toLocaleString('es-CL'), 196, finalY + 12, { align: "right" });
+    doc.text("TOTAL", 130, finalY + 16);
+    doc.text(formatMoney(totalFinalPDF), 195, finalY + 16, { align: "right" });
 
     // --- OBSERVACIONES Y TRANSFERENCIA ---
+    doc.setTextColor(27, 43, 65);
     doc.setFont("helvetica", "bold");
     doc.text("OBS:", 14, finalY + 25);
+    doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
-    doc.text(doc.splitTextToSize(q.notes, 170), 25, finalY + 25);
+    doc.text(doc.splitTextToSize(q.notes, 100), 25, finalY + 25); // Observaciones a la izquierda
 
+    // Texto final centrado
     let textY = finalY + 50;
     doc.setFontSize(9);
     doc.text("Si tiene cualquier tipo de pregunta acerca de esta oferta, póngase en contacto", 105, textY, { align: "center" });
     doc.text("indicando número de cotización.", 105, textY + 4, { align: "center" });
 
+    doc.setTextColor(27, 43, 65);
     doc.setFont("helvetica", "bold");
     doc.text("TRANSFERENCIA", 105, textY + 12, { align: "center" });
+    doc.setTextColor(0, 0, 0);
     doc.text("DMYC Spa", 105, textY + 16, { align: "center" });
     doc.setFont("helvetica", "normal");
     doc.text("Banco BCI Cta. Cte. 95148019", 105, textY + 20, { align: "center" });
     doc.text("INFO@DMYC.CL", 105, textY + 24, { align: "center" });
+    
+    doc.setTextColor(27, 43, 65);
     doc.setFont("helvetica", "bold");
     doc.text("GRACIAS POR SU CONFIANZA!", 105, textY + 32, { align: "center" });
 
     doc.save(`${q.id}.pdf`);
 }
+
 
 // Historial y Sync
 document.getElementById('btnViewHistory').addEventListener('click', () => {
