@@ -64,7 +64,13 @@ function renderLines() {
 
     lines.forEach(l => {
         let costCLP = currency === 'USD' ? (l.cost * rate) : l.cost;
-        let pVenta = costCLP * (1 + (l.margin / 100));
+        
+        // --- FÓRMULA CORREGIDA (Margen sobre Precio de Venta) ---
+        // Si por error alguien pone margen 100%, evitamos que el sistema se rompa dividiendo por 0
+        let divisor = 1 - (l.margin / 100);
+        if (divisor <= 0) divisor = 0.01; 
+        
+        let pVenta = costCLP / divisor;
         let totalLinea = pVenta * l.qty;
         subtotal += totalLinea;
 
@@ -87,6 +93,7 @@ function renderLines() {
     document.getElementById('ivaText').innerText = `${Math.round(iva).toLocaleString('es-CL')}`;
     document.getElementById('totalText').innerText = `${Math.round(subtotal + iva).toLocaleString('es-CL')}`;
 }
+
 
 document.getElementById('btnAddLine').addEventListener('click', () => addLine());
 document.getElementById('currency').addEventListener('change', renderLines);
@@ -267,24 +274,26 @@ function generatePDF(q) {
     doc.setFont("helvetica", "normal");
     doc.text("FMC", 14, 105);         doc.text("FMC", 60, 105);           doc.text("Pago Transferencia", 110, 105);
 
-    // --- TABLA PRODUCTOS ---
+        // TABLA PRODUCTOS
     const rate = parseFloat(q.rate) || 1;
     let subtotalPDF = 0;
 
     const tableData = q.lines.map(l => {
         let costoBase = q.currency === 'USD' ? l.cost : (l.cost * (q.currency === 'CLP' && q.costCurrency === 'USD' ? rate : 1));
-        let pVenta = costoBase * (1 + (l.margin/100));
+        
+        // --- FÓRMULA CORREGIDA ---
+        let divisor = 1 - (l.margin / 100);
+        if (divisor <= 0) divisor = 0.01; 
+        
+        let pVenta = costoBase / divisor;
         let totalLinea = pVenta * l.qty;
         subtotalPDF += totalLinea;
 
         return [
-            l.qty, 
-            l.desc, 
-            formatMoney(pVenta), 
-            l.unit, 
-            formatMoney(totalLinea)
+            l.qty, l.desc, formatMoney(pVenta), l.unit, formatMoney(totalLinea)
         ];
     });
+
 
     let ivaPDF = subtotalPDF * 0.19;
     let totalFinalPDF = subtotalPDF + ivaPDF;
