@@ -1,0 +1,16 @@
+{
+  "name": "DMYC Cotizaciones",
+  "short_name": "DMYC",
+  "description": "Sistema offline de cotizaciones para DMYC",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff6600",
+  "icons": [
+    {
+      "src": "DMYC_logotipo_Mesa-de-trabajo-1.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
