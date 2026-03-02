@@ -458,3 +458,20 @@ document.getElementById('btnSync').addEventListener('click', () => {
         } catch { alert("Error conectando al PC."); }
     };
 });
+// --- NUEVA FUNCIÓN: AJUSTAR NÚMERO CORRELATIVO ---
+document.getElementById('btnSetSeq').addEventListener('click', async () => {
+    let currentSeq = await loadSetting("seq", MIN_SEQ);
+    let newSeq = prompt(`El número actual interno es: ${currentSeq}.\n\nSi tu PC va en la 407, escribe 408 aquí para que el iPad no choque:\n¿Desde qué número quieres continuar?`, currentSeq);
+    
+    if (newSeq !== null && !isNaN(newSeq) && newSeq !== "") {
+        newSeq = parseInt(newSeq);
+        if (newSeq >= 1) {
+            await saveSetting("seq", newSeq);
+            await updateNextQuoteCode();
+            alert(`¡Listo! La próxima cotización será la ${newSeq}.`);
+        } else {
+            alert("Por favor ingresa un número válido mayor a 0.");
+        }
+    }
+});
+
