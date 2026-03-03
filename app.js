@@ -26,6 +26,7 @@ function loadSetting(key, defaultVal) {
         req.onsuccess = () => resolve(req.result ? req.result.value : defaultVal);
     });
 }
+
 async function updateNextQuoteCode() {
     if (editingQuoteId) return;
     let seq = await loadSetting("seq", MIN_SEQ);
@@ -37,15 +38,22 @@ document.getElementById('clientName').addEventListener('input', updateNextQuoteC
 
 function addLine(data = {}) {
     lines.push({
-        id: Date.now() + Math.random(), desc: data.desc || data.name || '', qty: data.qty || 1,
-        unit: data.unit || data.unitType || 'UN', cost: data.cost || 0, margin: data.margin || data.marginPct || 30
+        id: Date.now() + Math.random(),
+        desc: data.desc || data.name || '',
+        qty: data.qty || 1,
+        unit: data.unit || data.unitType || 'UN',
+        cost: data.cost || 0,
+        margin: data.margin || data.marginPct || 30
     });
     renderLines();
 }
 
 window.updateLine = function(id, field, value) {
     const line = lines.find(l => l.id === id);
-    if(line) { line[field] = parseFloat(value) || value; renderLines(); }
+    if(line) {
+        line[field] = parseFloat(value) || value;
+        renderLines();
+    }
 }
 
 window.removeLine = function(id) {
@@ -63,7 +71,7 @@ function renderLines() {
     lines.forEach(l => {
         let costCLP = currency === 'USD' ? (l.cost * rate) : l.cost;
 
-        // Margen sobre precio de venta
+        // Margen sobre precio de venta: Precio = Costo / (1 - margen%)
         let divisor = 1 - (l.margin / 100);
         if (divisor <= 0) divisor = 0.01;
         let pVenta = costCLP / divisor;
@@ -112,8 +120,11 @@ document.getElementById('bulkUpload').addEventListener('change', function(e) {
             const cost = parseFloat(row.costo) || parseFloat(row.Costo) || 0;
             if (desc && qty > 0 && cost > 0) {
                 lines.push({
-                    id: Date.now() + Math.random(), desc: desc, qty: qty,
-                    unit: row.unidad || row.Unidad || 'UN', cost: cost,
+                    id: Date.now() + Math.random(),
+                    desc: desc,
+                    qty: qty,
+                    unit: row.unidad || row.Unidad || 'UN',
+                    cost: cost,
                     margin: parseFloat(row.margen_pct) || parseFloat(row.Margen_pct) || 30
                 });
                 count++;
@@ -143,10 +154,11 @@ document.getElementById('btnSave').addEventListener('click', async () => {
         id: qNum, 
         date: dateStr, 
         validDate: validDateStr,
-        client, // Empresa
-        contact: document.getElementById('clientContact') ? document.getElementById('clientContact').value : '',
+        client,
+        contact: document.getElementById('clientContact').value,
         rut: document.getElementById('clientRut').value, 
         address: document.getElementById('clientAddress').value,
+        city: document.getElementById('clientCity').value,
         phone: document.getElementById('clientPhone').value, 
         email: document.getElementById('clientEmail').value,
         status: document.getElementById('quoteStatus').value, 
@@ -181,9 +193,10 @@ document.getElementById('btnCancelEdit').addEventListener('click', async () => {
     document.getElementById('btnSave').innerHTML = '💾 Guardar y Generar PDF';
     
     document.getElementById('clientName').value = '';
-    if (document.getElementById('clientContact')) document.getElementById('clientContact').value = '';
+    document.getElementById('clientContact').value = '';
     document.getElementById('clientRut').value = '';
     document.getElementById('clientAddress').value = '';
+    document.getElementById('clientCity').value = '';
     document.getElementById('clientPhone').value = '';
     document.getElementById('clientEmail').value = '';
     lines = [];
@@ -245,7 +258,7 @@ function generatePDF(q) {
     doc.setFont("helvetica", "bold");
     doc.text("Empresa", 14, 63);      
     doc.setFont("helvetica", "normal"); 
-    doc.text(q.client || "-", 40, 63);   // ← AHORA USAMOS EL CLIENTE REAL
+    doc.text(q.client || "-", 40, 63);
 
     doc.setFont("helvetica", "bold");
     doc.text("Rut", 14, 68);          
@@ -257,17 +270,20 @@ function generatePDF(q) {
     doc.setFont("helvetica", "normal"); 
     doc.text(q.address || "-", 40, 73);
 
-    // (Quitamos la fila de Ciudad para no fijar "Arica")
+    doc.setFont("helvetica", "bold");
+    doc.text("Ciudad", 14, 78);    
+    doc.setFont("helvetica", "normal"); 
+    doc.text(q.city || "-", 40, 78);
 
     doc.setFont("helvetica", "bold");
-    doc.text("Teléfono", 14, 78);     
+    doc.text("Teléfono", 14, 83);     
     doc.setFont("helvetica", "normal"); 
-    doc.text(q.phone || "-", 40, 78);
+    doc.text(q.phone || "-", 40, 83);
 
     doc.setFont("helvetica", "bold");
-    doc.text("Email", 14, 83);        
+    doc.text("Email", 14, 88);        
     doc.setFont("helvetica", "normal"); 
-    doc.text(q.email || "-", 40, 83);
+    doc.text(q.email || "-", 40, 88);
 
     // VENDEDOR Y TÉRMINOS
     doc.setTextColor(27, 43, 65);
@@ -377,9 +393,10 @@ window.editQuoteHistory = function(id) {
             
             document.getElementById('quoteNumber').innerText = q.id;
             document.getElementById('clientName').value = q.client || '';
-            if (document.getElementById('clientContact')) document.getElementById('clientContact').value = q.contact || '';
+            document.getElementById('clientContact').value = q.contact || '';
             document.getElementById('clientRut').value = q.rut || '';
             document.getElementById('clientAddress').value = q.address || '';
+            document.getElementById('clientCity').value = q.city || '';
             document.getElementById('clientPhone').value = q.phone || '';
             document.getElementById('clientEmail').value = q.email || '';
             document.getElementById('quoteStatus').value = q.status || 'Pendiente';
@@ -401,10 +418,14 @@ document.getElementById('btnViewHistory').addEventListener('click', () => {
     document.getElementById('newQuoteView').classList.add('hidden');
     document.getElementById('historyView').classList.remove('hidden');
     db.transaction("quotes").objectStore("quotes").getAll().onsuccess = (e) => {
-        document.getElementById('historyBody').innerHTML = e.target.result.sort((a,b) => a.id < b.id ? 1 : -1).map(q => `
+        document.getElementById('historyBody').innerHTML = e.target.result
+            .sort((a,b) => a.id < b.id ? 1 : -1)
+            .map(q => `
             <tr class="border-b text-center">
-                <td class="p-2 font-bold text-gray-700">${q.id}</td><td class="p-2">${q.date}</td>
-                <td class="p-2 text-left">${q.client}</td><td class="p-2">${q.total.toLocaleString('es-CL')}</td>
+                <td class="p-2 font-bold text-gray-700">${q.id}</td>
+                <td class="p-2">${q.date}</td>
+                <td class="p-2 text-left">${q.client}</td>
+                <td class="p-2">${q.total.toLocaleString('es-CL')}</td>
                 <td class="p-2">${q.status}</td>
                 <td class="p-2 flex justify-center gap-2">
                     <button onclick="editQuoteHistory('${q.id}')" class="text-green-600 hover:underline font-bold">✏️ Editar</button>
@@ -428,7 +449,12 @@ window.downloadPdfHistory = function(id) {
 // Ajustar correlativo manualmente
 document.getElementById('btnSetSeq').addEventListener('click', async () => {
     let currentSeq = await loadSetting("seq", MIN_SEQ);
-    let newSeq = prompt(`El número actual interno es: ${currentSeq}.\n\nSi tu PC va en la 407, escribe 408 aquí para que el iPad no choque:\n¿Desde qué número quieres continuar?`, currentSeq);
+    let newSeq = prompt(
+        `El número actual interno es: ${currentSeq}.\n\n` +
+        `Si tu PC va en la 407, escribe 408 aquí para que el iPad no choque:\n` +
+        `¿Desde qué número quieres continuar?`,
+        currentSeq
+    );
     
     if (newSeq !== null && !isNaN(newSeq) && newSeq !== "") {
         newSeq = parseInt(newSeq);
@@ -442,20 +468,24 @@ document.getElementById('btnSetSeq').addEventListener('click', async () => {
     }
 });
 
-// Sync con PC (queda igual)
+// Sync con PC
 document.getElementById('btnSync').addEventListener('click', () => {
     db.transaction("quotes").objectStore("quotes").getAll().onsuccess = async (e) => {
         const unSynced = e.target.result.filter(q => !q.synced);
         if(unSynced.length === 0) return alert("Todo sincronizado.");
         try {
             const res = await fetch('http://localhost:8787/api/push', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(unSynced)
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(unSynced)
             });
             if(res.ok) {
                 const txWrite = db.transaction("quotes", "readwrite");
                 unSynced.forEach(q => { q.synced = true; txWrite.objectStore("quotes").put(q); });
                 alert("¡Sincronizado con PC exitosamente!");
             }
-        } catch { alert("Error conectando al PC."); }
+        } catch {
+            alert("Error conectando al PC.");
+        }
     };
 });
