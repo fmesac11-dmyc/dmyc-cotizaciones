@@ -215,32 +215,30 @@ function generatePDF(q) {
         return `$${Math.round(val).toLocaleString('es-CL')}`;
     };
 
-    // --- LOGO DMYC (arriba izquierda) ---
-    // Nota: El logo debe estar accesible, el navegador lo convierte internamente.
     const logo = new Image();
     logo.src = 'DMYC_logotipo_Mesa-de-trabajo-1.png';
 
-    // Usamos onload para asegurarnos que el logo está listo
     logo.onload = () => {
-        // Fondo blanco
+        // Fondo
         doc.setFillColor(255, 255, 255);
         doc.rect(0, 0, 210, 297, 'F');
 
-        // Dibujar logo (ajusta tamaño/posición si quieres)
-        doc.addImage(logo, 'PNG', 14, 10, 50, 20);
+        // LOGO más alargado
+        // x=14, y=10, ancho=60mm, alto=14mm (ajusta si quieres)
+        doc.addImage(logo, 'PNG', 14, 10, 60, 14);
 
         // Datos empresa a la derecha del logo
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.text("DMYC spa 76.935.323-2", 60, 15);
+        doc.setFontSize(11);
+        doc.text("DMYC spa 76.935.323-2", 80, 15);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
-        doc.text("Cerro el plomo 5931 of 1213, Las Condes", 60, 20);
-        doc.text("Región Metropolitana", 60, 25);
+        doc.text("Cerro el plomo 5931 of 1213, Las Condes", 80, 20);
+        doc.text("Región Metropolitana", 80, 25);
 
-        // Bloque datos de la cotización a la derecha
-        doc.setFontSize(8);
+        // Datos cotización (derecha)
+        doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
         doc.text("COTIZACIÓN N°", 140, 15);
         doc.setFont("helvetica", "normal");
@@ -262,7 +260,7 @@ function generatePDF(q) {
         doc.setLineWidth(0.3);
         doc.line(14, 35, 196, 35);
 
-        // --- PRESUPUESTO PARA (CLIENTE) ---
+        // PRESUPUESTO PARA
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(27, 43, 65);
@@ -304,7 +302,7 @@ function generatePDF(q) {
         doc.setFont("helvetica", "normal");
         doc.text(q.email || "-", 40, 82);
 
-        // --- VENDEDOR Y TÉRMINOS (a la derecha) ---
+        // AUTOR / VENDEDOR / TÉRMINOS
         doc.setFont("helvetica", "bold");
         doc.setTextColor(27, 43, 65);
         doc.text("AUTOR", 120, 52);
@@ -321,7 +319,7 @@ function generatePDF(q) {
         doc.setDrawColor(200, 200, 200);
         doc.line(14, 90, 196, 90);
 
-        // --- TABLA PRODUCTOS ---
+        // TABLA PRODUCTOS
         const rate = parseFloat(q.rate) || 1;
         let subtotalPDF = 0;
 
@@ -341,6 +339,97 @@ function generatePDF(q) {
                 formatMoney(totalLinea)
             ];
         });
+
+        let ivaPDF = subtotalPDF * 0.19;
+        let totalFinalPDF = subtotalPDF + ivaPDF;
+
+        doc.autoTable({
+            startY: 94,
+            head: [[
+                'CANT.',
+                'DESCRIPCIÓN',
+                'PRECIO\nPOR UNIDAD',
+                'UNIDAD',
+                'TOTAL'
+            ]],
+            body: tableData,
+            theme: 'striped',
+            headStyles: { 
+                fillColor: [27, 43, 65],
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 8
+            },
+            bodyStyles: { 
+                textColor: [0,0,0],
+                cellPadding: 3,
+                fontSize: 8
+            },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 20 },
+                1: { halign: 'left',   cellWidth: 80 },
+                2: { halign: 'center', cellWidth: 35 },
+                3: { halign: 'center', cellWidth: 20 },
+                4: { halign: 'right',  cellWidth: 30 }
+            }
+        });
+
+        // TOTALES
+        let finalY = doc.lastAutoTable.finalY + 8;
+
+        doc.setFillColor(240, 240, 240);
+        doc.rect(120, finalY - 4, 80, 22, 'F');
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "bold");
+        doc.text("SUBTOTAL", 125, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text(formatMoney(subtotalPDF), 195, finalY, { align: "right" });
+
+        doc.setFont("helvetica", "bold");
+        doc.text("MONTO IVA 19%", 125, finalY + 6);
+        doc.setFont("helvetica", "normal");
+        doc.text(formatMoney(ivaPDF), 195, finalY + 6, { align: "right" });
+
+        doc.setFillColor(27, 43, 65);
+        doc.rect(120, finalY + 10, 80, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.text("TOTAL", 125, finalY + 16);
+        doc.text(formatMoney(totalFinalPDF), 195, finalY + 16, { align: "right" });
+
+        // OBSERVACIONES
+        doc.setTextColor(27, 43, 65);
+        doc.setFont("helvetica", "bold");
+        doc.text("OBS:", 14, finalY + 25);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "normal");
+        doc.text(doc.splitTextToSize(q.notes, 100), 25, finalY + 25);
+
+        // TEXTO FINAL + TRANSFERENCIA
+        let textY = finalY + 50;
+        doc.setFontSize(9);
+        doc.text("Si tiene cualquier tipo de pregunta acerca de esta oferta, póngase en contacto", 105, textY, { align: "center" });
+        doc.text("indicando número de cotización.", 105, textY + 4, { align: "center" });
+
+        doc.setTextColor(27, 43, 65);
+        doc.setFont("helvetica", "bold");
+        doc.text("TRANSFERENCIA", 105, textY + 12, { align: "center" });
+        doc.setTextColor(0, 0, 0);
+        doc.text("DMYC Spa", 105, textY + 16, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.text("Banco BCI Cta. Cte. 95148019", 105, textY + 20, { align: "center" });
+        doc.text("INFO@DMYC.CL", 105, textY + 24, { align: "center" });
+        doc.setTextColor(27, 43, 65);
+        doc.setFont("helvetica", "bold");
+        doc.text("GRACIAS POR SU CONFIANZA!", 105, textY + 32, { align: "center" });
+
+        doc.save(`${q.id}.pdf`);
+    };
+}
+
 
         let ivaPDF = subtotalPDF * 0.19;
         let totalFinalPDF = subtotalPDF + ivaPDF;
