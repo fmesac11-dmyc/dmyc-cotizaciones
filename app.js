@@ -232,7 +232,7 @@ function generatePDF(q) {
         // Datos empresa a la derecha del logo
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.text("DMYC spa 76.935.323-2", 60, 15);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
@@ -240,7 +240,7 @@ function generatePDF(q) {
         doc.text("Región Metropolitana", 60, 25);
 
         // Bloque datos de la cotización a la derecha
-        doc.setFontSize(9);
+        doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
         doc.text("COTIZACIÓN N°", 140, 15);
         doc.setFont("helvetica", "normal");
@@ -356,7 +356,7 @@ function generatePDF(q) {
                 fontStyle: 'bold',
                 halign: 'center'
             },
-            bodyStyles: { textColor: [0,0,0], cellPadding: 3, fontSize: 9 },
+            bodyStyles: { textColor: [0,0,0], cellPadding: 3, fontSize: 8 },
             alternateRowStyles: { fillColor: [245, 245, 245] },
             columnStyles: {
                 0: { halign: 'center', cellWidth: 20 },
