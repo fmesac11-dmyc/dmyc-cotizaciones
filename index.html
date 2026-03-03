@@ -13,7 +13,7 @@
 <body class="bg-gray-100 font-sans p-4">
     <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-lg">
         
-               <!-- Cabecera -->
+        <!-- Cabecera -->
         <div class="flex justify-between items-center border-b pb-4 mb-4">
             <div>
                 <h1 class="text-3xl font-bold text-orange-600">DMYC Cotizaciones</h1>
@@ -30,7 +30,6 @@
                 </div>
             </div>
         </div>
-
 
         <!-- Vista Nueva Cotización -->
         <div id="newQuoteView">
@@ -55,13 +54,36 @@
                 <div class="col-span-1 md:col-span-3">
                     <h3 class="font-bold text-lg text-gray-700 border-b pb-2 mb-2">Datos del Cliente</h3>
                 </div>
-                <div><label class="block font-bold">Empresa / Cliente</label><input type="text" id="clientName" class="w-full border p-2 rounded" placeholder="Ej: Constructora Montec"></div>
-                <div><label class="block font-bold">Contacto (Solicitante)</label><input type="text" id="clientContact" class="w-full border p-2 rounded" placeholder="Ej: Bárbara González"></div>
-                <div><label class="block font-bold">RUT Empresa</label><input type="text" id="clientRut" class="w-full border p-2 rounded"></div>
-                <div><label class="block font-bold">Dirección / Obra</label><input type="text" id="clientAddress" class="w-full border p-2 rounded"></div>
-                <div><label class="block font-bold">Teléfono</label><input type="text" id="clientPhone" class="w-full border p-2 rounded"></div>
-                <div><label class="block font-bold">Email</label><input type="email" id="clientEmail" class="w-full border p-2 rounded"></div>
-                <div><label class="block font-bold">Estado de Cotización</label>
+                <div>
+                    <label class="block font-bold">Empresa / Cliente</label>
+                    <input type="text" id="clientName" class="w-full border p-2 rounded" placeholder="Ej: Montec, RADICCI, etc.">
+                </div>
+                <div>
+                    <label class="block font-bold">Contacto (Solicitante)</label>
+                    <input type="text" id="clientContact" class="w-full border p-2 rounded" placeholder="Ej: Bárbara González">
+                </div>
+                <div>
+                    <label class="block font-bold">RUT Empresa</label>
+                    <input type="text" id="clientRut" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block font-bold">Dirección / Obra</label>
+                    <input type="text" id="clientAddress" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block font-bold">Ciudad</label>
+                    <input type="text" id="clientCity" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block font-bold">Teléfono</label>
+                    <input type="text" id="clientPhone" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block font-bold">Email</label>
+                    <input type="email" id="clientEmail" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block font-bold">Estado de Cotización</label>
                     <select id="quoteStatus" class="w-full border p-2 rounded">
                         <option value="Pendiente">Pendiente</option>
                         <option value="Ganado">Ganado</option>
@@ -75,7 +97,6 @@
                 <div class="flex justify-between items-center mb-2">
                     <h3 class="text-xl font-bold border-b pb-2">Líneas de Materiales</h3>
                     <div>
-                        <!-- Botón Carga Masiva Excel -->
                         <input type="file" id="bulkUpload" accept=".xlsx" class="hidden">
                         <button id="btnBulkUpload" class="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700">
                             📁 Cargar Excel Masivo
@@ -107,7 +128,7 @@
                 <div class="w-full md:w-1/2">
                     <label class="block font-bold">Observaciones / Condiciones:</label>
                     <textarea id="notes" rows="4" class="w-full border p-2 rounded">Validez de la oferta: 5 días.
-Forma de pago: 50% anticipo, 50% contra entrega.
+Forma de pago: Transferencia.
 Material para entrega inmediata en Santiago.</textarea>
                 </div>
                 <div class="w-full md:w-1/2 bg-gray-50 p-4 rounded border">
@@ -150,7 +171,6 @@ Material para entrega inmediata en Santiago.</textarea>
         </div>
     </div>
 
-    <!-- Conexión a la lógica de la app -->
     <script type="module" src="app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
