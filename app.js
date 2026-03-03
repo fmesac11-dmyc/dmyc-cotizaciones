@@ -227,7 +227,7 @@ function generatePDF(q) {
         doc.rect(0, 0, 210, 297, 'F');
 
         // Dibujar logo (ajusta tamaño/posición si quieres)
-        doc.addImage(logo, 'PNG', 14, 10, 35, 20);
+        doc.addImage(logo, 'PNG', 14, 10, 50, 20);
 
         // Datos empresa a la derecha del logo
         doc.setTextColor(0, 0, 0);
