@@ -240,7 +240,7 @@ function drawPdfContent(doc, q, formatMoney, logo) {
     doc.rect(0, 0, 210, 297, 'F');
 
     if (logo) {
-        doc.addImage(logo, 'PNG', 14, 10, 50, 14);
+        doc.addImage(logo, 'PNG', 20, 10, 45, 14);
     }
 
     doc.setTextColor(0, 0, 0);
@@ -414,7 +414,7 @@ function drawPdfContent(doc, q, formatMoney, logo) {
     doc.setFont("helvetica", "normal");
     doc.text(doc.splitTextToSize(q.notes, 100), 25, finalY + 25);
 
-    let textY = finalY + 50;
+    let textY = finalY + 80;
     doc.setFontSize(9);
     doc.text("Si tiene cualquier tipo de pregunta acerca de esta oferta, póngase en contacto", 105, textY, { align: "center" });
     doc.text("indicando número de cotización.", 105, textY + 4, { align: "center" });
