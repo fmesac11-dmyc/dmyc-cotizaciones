@@ -251,22 +251,21 @@ function drawPdfContent(doc, q, formatMoney, logo) {
     doc.setFontSize(9);
     doc.text("Cerro el plomo 5931 of 1213, Las Condes", 75, 20);
     doc.text("Región Metropolitana", 75, 25);
+doc.setFontSize(9);
+doc.setFont("helvetica", "bold");
+doc.text("COTIZACIÓN N°", 140, 15);    // 145 → 140
+doc.setFont("helvetica", "normal");
+doc.text(q.id, 170, 15);               // 180 → 170
 
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("COTIZACIÓN N°", 145, 15);
-    doc.setFont("helvetica", "normal");
-    doc.text(q.id, 180, 15);
+doc.setFont("helvetica", "bold");
+doc.text("FECHA", 140, 20);            // 145 → 140
+doc.setFont("helvetica", "normal");
+doc.text(q.date, 162, 20);             // 173 → 162
 
-    doc.setFont("helvetica", "bold");
-    doc.text("FECHA", 145, 20);
-    doc.setFont("helvetica", "normal");
-    doc.text(q.date, 173, 20);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("VÁLIDO HASTA", 145, 25);
-    doc.setFont("helvetica", "normal");
-    doc.text(q.validDate || q.date, 177, 25);
+doc.setFont("helvetica", "bold");
+doc.text("VÁLIDO HASTA", 140, 25);     // 145 → 140
+doc.setFont("helvetica", "normal");
+doc.text(q.validDate || q.date, 170, 25);  // 177 → 170
 
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
