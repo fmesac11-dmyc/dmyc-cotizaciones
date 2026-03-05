@@ -240,7 +240,7 @@ function drawPdfContent(doc, q, formatMoney, logo) {
     doc.rect(0, 0, 210, 297, 'F');
 
     if (logo) {
-        doc.addImage(logo, 'PNG', 14, 10, 60, 14);
+        doc.addImage(logo, 'PNG', 14, 10, 50, 14);
     }
 
     doc.setTextColor(0, 0, 0);
