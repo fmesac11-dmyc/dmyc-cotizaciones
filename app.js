@@ -413,7 +413,7 @@ doc.text(q.validDate || q.date, 170, 25);  // 177 → 170
     doc.setFont("helvetica", "normal");
     doc.text(doc.splitTextToSize(q.notes, 100), 25, finalY + 25);
 
-    let textY = finalY + 80;
+    let textY = finalY + 100;
     doc.setFontSize(9);
     doc.text("Si tiene cualquier tipo de pregunta acerca de esta oferta, póngase en contacto", 105, textY, { align: "center" });
     doc.text("indicando número de cotización.", 105, textY + 4, { align: "center" });
