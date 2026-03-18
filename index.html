@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DMYC - Sistema de Cotizaciones</title>
-    <link rel="manifest" href="manifest.webmanifest">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-</head>
+<thead>
+    <tr class="bg-gray-200">
+        <th class="p-2 border">Descripción</th>
+        <th class="p-2 border w-24">Cant.</th>
+        <th class="p-2 border w-24">Unid.</th>
+        <th class="p-2 border w-32">Costo</th>
+        <th class="p-2 border w-24">Margen %</th>
+        <th class="p-2 border w-32">P. Venta</th>
+        <th class="p-2 border w-32">Total</th>
+        <th class="p-2 border w-32 bg-green-100 text-green-800">Utilidad $</th>
+        <th class="p-2 border w-12"></th>
+    </tr>
+</thead>
 <body class="bg-gray-100 font-sans p-4">
     <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-lg">
         
@@ -136,11 +139,16 @@ Forma de pago: Transferencia.
 Material para entrega inmediata en Santiago.</textarea>
                 </div>
                 <div class="w-full md:w-1/2 bg-gray-50 p-4 rounded border">
-                    <div class="flex justify-between font-bold text-lg mb-2"><span>Subtotal Neto:</span><span id="subtotalText">$0</span></div>
-                    <div class="flex justify-between font-bold text-lg mb-2 text-gray-600"><span>IVA 19%:</span><span id="ivaText">$0</span></div>
-                    <div class="flex justify-between font-bold text-2xl text-orange-600 border-t pt-2"><span>TOTAL:</span><span id="totalText">$0</span></div>
-                </div>
-            </div>
+    <div class="flex justify-between font-bold text-lg mb-2 text-green-700">
+        <span>Utilidad Estimada:</span>
+        <span id="utilityText">$0</span>
+    </div>
+    <div class="flex justify-between font-bold text-lg mb-2"><span>Subtotal Neto:</span><span id="subtotalText">$0</span></div>
+    <div class="flex justify-between font-bold text-lg mb-2 text-gray-600"><span>IVA 19%:</span><span id="ivaText">$0</span></div>
+    <div class="flex justify-between font-bold text-2xl text-orange-600 border-t pt-2"><span>TOTAL:</span><span id="totalText">$0</span></div>
+    <p class="text-xs text-gray-500 mt-3">La utilidad es solo interna y no aparece en el PDF.</p>
+</div>
+
 
             <!-- Botones de Guardar / Editar -->
             <div class="mt-6 text-right flex justify-end gap-4">
