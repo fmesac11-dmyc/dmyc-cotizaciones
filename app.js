@@ -5,10 +5,12 @@ let db;
 let lines = [];
 let editingQuoteId = null;
 
-initDB().then(database => {
-    db = database;
-    initApp();
-}).catch(err => console.error("Error cargando DB:", err));
+initDB()
+    .then(database => {
+        db = database;
+        initApp();
+    })
+    .catch(err => console.error("Error cargando DB:", err));
 
 async function initApp() {
     await updateNextQuoteCode();
@@ -20,6 +22,7 @@ async function initApp() {
 function saveSetting(key, value) {
     db.transaction("settings", "readwrite").objectStore("settings").put({ key, value });
 }
+
 function loadSetting(key, defaultVal) {
     return new Promise(resolve => {
         const req = db.transaction("settings", "readonly").objectStore("settings").get(key);
@@ -27,17 +30,79 @@ function loadSetting(key, defaultVal) {
     });
 }
 
+function formatCLP(value) {
+    return `$${Math.round(value).toLocaleString('es-CL')}`;
+}
+
+function safeText(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function getLineCalc(line, currency, rate) {
+    const qty = Number(line.qty) || 0;
+    const cost = Number(line.cost) || 0;
+    const margin = Number(line.margin) || 0;
+
+    const costCLP = currency === 'USD' ? cost * rate : cost;
+
+    let divisor = 1 - (margin / 100);
+    if (divisor <= 0) divisor = 0.01;
+
+    const pVenta = costCLP / divisor;
+    const totalLinea = pVenta * qty;
+    const costoTotalLinea = costCLP * qty;
+    const utilidadLinea = totalLinea - costoTotalLinea;
+
+    return {
+        qty,
+        cost,
+        margin,
+        costCLP,
+        pVenta,
+        totalLinea,
+        costoTotalLinea,
+        utilidadLinea
+    };
+}
+
+function calculateTotals() {
+    const currency = document.getElementById('currency').value;
+    const rate = parseFloat(document.getElementById('exchangeRate').value) || 1;
+
+    let subtotal = 0;
+    let totalUtilidad = 0;
+
+    lines.forEach(line => {
+        const calc = getLineCalc(line, currency, rate);
+        subtotal += calc.totalLinea;
+        totalUtilidad += calc.utilidadLinea;
+    });
+
+    const iva = subtotal * 0.19;
+    const total = subtotal + iva;
+
+    return { subtotal, iva, total, totalUtilidad };
+}
+
 // Genera COT-XXXX-CLIE
 async function updateNextQuoteCode() {
     if (editingQuoteId) return;
+
     let seq = await loadSetting("seq", MIN_SEQ);
     seq = Math.max(seq, MIN_SEQ);
+
     const client = (document.getElementById('clientName').value || 'CLIE')
-        .substring(0,4)
+        .substring(0, 4)
         .toUpperCase();
+
     document.getElementById('quoteNumber').innerText =
         `COT-${String(seq).padStart(4, '0')}-${client}`;
 }
+
 document.getElementById('clientName').addEventListener('input', updateNextQuoteCode);
 
 function addLine(data = {}) {
@@ -54,99 +119,161 @@ function addLine(data = {}) {
 
 window.updateLine = function(id, field, value) {
     const line = lines.find(l => l.id === id);
-    if(line) {
-        line[field] = parseFloat(value) || value;
-        renderLines();
+    if (!line) return;
+
+    if (field === 'qty' || field === 'cost' || field === 'margin') {
+        line[field] = parseFloat(value) || 0;
+    } else {
+        line[field] = value;
     }
-}
+
+    renderLines();
+};
 
 window.removeLine = function(id) {
     lines = lines.filter(l => l.id !== id);
-    renderLines();
-}
+    if (lines.length === 0) addLine();
+    else renderLines();
+};
 
 function renderLines() {
     const tbody = document.getElementById('linesBody');
     tbody.innerHTML = '';
+
     const currency = document.getElementById('currency').value;
     const rate = parseFloat(document.getElementById('exchangeRate').value) || 1;
-    let subtotal = 0;
 
     lines.forEach(l => {
-        let costCLP = currency === 'USD' ? (l.cost * rate) : l.cost;
-        let divisor = 1 - (l.margin / 100);
-        if (divisor <= 0) divisor = 0.01;
-        let pVenta = costCLP / divisor;
-        let totalLinea = pVenta * l.qty;
-        subtotal += totalLinea;
+        const calc = getLineCalc(l, currency, rate);
 
         tbody.innerHTML += `
             <tr class="border-b bg-white">
-                <td class="p-1"><input type="text" value="${l.desc}" onchange="updateLine(${l.id}, 'desc', this.value)" class="w-full border p-1 rounded"></td>
-                <td class="p-1"><input type="number" value="${l.qty}" onchange="updateLine(${l.id}, 'qty', this.value)" class="w-full border p-1 rounded"></td>
-                <td class="p-1"><input type="text" value="${l.unit}" onchange="updateLine(${l.id}, 'unit', this.value)" class="w-full border p-1 rounded"></td>
-                <td class="p-1"><input type="number" value="${l.cost}" onchange="updateLine(${l.id}, 'cost', this.value)" class="w-full border p-1 rounded"></td>
-                <td class="p-1"><input type="number" value="${l.margin}" onchange="updateLine(${l.id}, 'margin', this.value)" class="w-full border p-1 rounded"></td>
-                <td class="p-1 text-right font-bold font-mono">${Math.round(pVenta).toLocaleString('es-CL')}</td>
-                <td class="p-1 text-right font-bold text-orange-600 font-mono">${Math.round(totalLinea).toLocaleString('es-CL')}</td>
-                <td class="p-1 text-center"><button onclick="removeLine(${l.id})" class="text-red-500 font-bold">X</button></td>
+                <td class="p-1">
+                    <input
+                        type="text"
+                        value="${safeText(l.desc)}"
+                        onchange="updateLine(${l.id}, 'desc', this.value)"
+                        class="w-full border p-1 rounded"
+                    >
+                </td>
+                <td class="p-1">
+                    <input
+                        type="number"
+                        value="${Number(l.qty) || 0}"
+                        onchange="updateLine(${l.id}, 'qty', this.value)"
+                        class="w-full border p-1 rounded"
+                    >
+                </td>
+                <td class="p-1">
+                    <input
+                        type="text"
+                        value="${safeText(l.unit)}"
+                        onchange="updateLine(${l.id}, 'unit', this.value)"
+                        class="w-full border p-1 rounded"
+                    >
+                </td>
+                <td class="p-1">
+                    <input
+                        type="number"
+                        value="${Number(l.cost) || 0}"
+                        onchange="updateLine(${l.id}, 'cost', this.value)"
+                        class="w-full border p-1 rounded"
+                    >
+                </td>
+                <td class="p-1">
+                    <input
+                        type="number"
+                        value="${Number(l.margin) || 0}"
+                        onchange="updateLine(${l.id}, 'margin', this.value)"
+                        class="w-full border p-1 rounded"
+                    >
+                </td>
+                <td class="p-1 text-right font-bold font-mono">
+                    ${formatCLP(calc.pVenta)}
+                </td>
+                <td class="p-1 text-right font-bold text-orange-600 font-mono">
+                    ${formatCLP(calc.totalLinea)}
+                </td>
+                <td class="p-1 text-right font-bold text-green-700 font-mono bg-green-50">
+                    ${formatCLP(calc.utilidadLinea)}
+                </td>
+                <td class="p-1 text-center">
+                    <button onclick="removeLine(${l.id})" class="text-red-500 font-bold">X</button>
+                </td>
             </tr>
         `;
     });
 
-    const iva = subtotal * 0.19;
-    document.getElementById('subtotalText').innerText = `${Math.round(subtotal).toLocaleString('es-CL')}`;
-    document.getElementById('ivaText').innerText = `${Math.round(iva).toLocaleString('es-CL')}`;
-    document.getElementById('totalText').innerText = `${Math.round(subtotal + iva).toLocaleString('es-CL')}`;
+    const totals = calculateTotals();
+
+    document.getElementById('utilityText').innerText = formatCLP(totals.totalUtilidad);
+    document.getElementById('subtotalText').innerText = formatCLP(totals.subtotal);
+    document.getElementById('ivaText').innerText = formatCLP(totals.iva);
+    document.getElementById('totalText').innerText = formatCLP(totals.total);
 }
 
 document.getElementById('btnAddLine').addEventListener('click', () => addLine());
 document.getElementById('currency').addEventListener('change', renderLines);
-document.getElementById('exchangeRate').addEventListener('input', (e) => { 
-    saveSetting('exchangeRate', e.target.value); 
-    renderLines(); 
+document.getElementById('exchangeRate').addEventListener('input', (e) => {
+    saveSetting('exchangeRate', e.target.value);
+    renderLines();
 });
 
 // Excel masivo
-document.getElementById('btnBulkUpload').addEventListener('click', () => document.getElementById('bulkUpload').click());
+document.getElementById('btnBulkUpload').addEventListener('click', () => {
+    document.getElementById('bulkUpload').click();
+});
+
 document.getElementById('bulkUpload').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = function(e) {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, {type: 'array'});
-        const excelData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
-        
+
+    reader.onload = function(ev) {
+        const data = new Uint8Array(ev.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const excelData = XLSX.utils.sheet_to_json(
+            workbook.Sheets[workbook.SheetNames[0]],
+            { defval: "" }
+        );
+
         let count = 0;
+
         excelData.forEach(row => {
-            const desc = row.descripcion || row.Descripcion || '';
-            const qty = parseFloat(row.cantidad) || parseFloat(row.Cantidad) || 0;
-            const cost = parseFloat(row.costo) || parseFloat(row.Costo) || 0;
+            const desc = row.descripcion || row.Descripcion || row.DESCRIPCION || '';
+            const qty = parseFloat(row.cantidad || row.Cantidad || row.CANTIDAD) || 0;
+            const cost = parseFloat(row.costo || row.Costo || row.COSTO) || 0;
+
             if (desc && qty > 0 && cost > 0) {
                 lines.push({
                     id: Date.now() + Math.random(),
-                    desc: desc,
-                    qty: qty,
-                    unit: row.unidad || row.Unidad || 'UN',
-                    cost: cost,
-                    margin: parseFloat(row.margen_pct) || parseFloat(row.Margen_pct) || 30
+                    desc,
+                    qty,
+                    unit: row.unidad || row.Unidad || row.UNIDAD || 'UN',
+                    cost,
+                    margin: parseFloat(row.margen_pct || row.Margen_pct || row.margen || row.Margen || 30) || 30
                 });
                 count++;
             }
         });
-        document.getElementById('bulkUpload').value = "";
+
+        document.getElementById('bulkUpload').value = '';
         renderLines();
         alert(`¡Cargados ${count} materiales desde el Excel!`);
     };
+
     reader.readAsArrayBuffer(file);
 });
 
 // Guardar y PDF
 document.getElementById('btnSave').addEventListener('click', async () => {
     const qNum = document.getElementById('quoteNumber').innerText;
-    const client = document.getElementById('clientName').value;
-    if(!client) return alert('Debes ingresar el nombre de la empresa/cliente.');
+    const client = document.getElementById('clientName').value.trim();
+
+    if (!client) {
+        return alert('Debes ingresar el nombre de la empresa/cliente.');
+    }
 
     const hoy = new Date();
     const formatoFecha = { day: 'numeric', month: 'long', year: 'numeric' };
@@ -157,35 +284,38 @@ document.getElementById('btnSave').addEventListener('click', async () => {
     fechaValida.setDate(fechaValida.getDate() + validDays);
     const validDateStr = fechaValida.toLocaleDateString('es-CL', formatoFecha);
 
+    const totals = calculateTotals();
+
     const quote = {
-        id: qNum, 
-        date: dateStr, 
+        id: qNum,
+        date: dateStr,
         validDate: validDateStr,
         client,
         contact: document.getElementById('clientContact').value,
-        rut: document.getElementById('clientRut').value, 
+        rut: document.getElementById('clientRut').value,
         address: document.getElementById('clientAddress').value,
         city: document.getElementById('clientCity').value,
-        phone: document.getElementById('clientPhone').value, 
+        phone: document.getElementById('clientPhone').value,
         email: document.getElementById('clientEmail').value,
-        status: document.getElementById('quoteStatus').value, 
+        status: document.getElementById('quoteStatus').value,
         notes: document.getElementById('notes').value,
-        currency: document.getElementById('currency').value, 
+        currency: document.getElementById('currency').value,
         rate: document.getElementById('exchangeRate').value,
-        lines: [...lines], 
-        subtotal: parseFloat(document.getElementById('subtotalText').innerText.replace(/\D/g, '')),
-        iva: parseFloat(document.getElementById('ivaText').innerText.replace(/\D/g, '')),
-        total: parseFloat(document.getElementById('totalText').innerText.replace(/\D/g, '')), 
+        lines: [...lines],
+        subtotal: totals.subtotal,
+        iva: totals.iva,
+        total: totals.total,
+        utilityTotal: totals.totalUtilidad,
         synced: false
     };
 
     db.transaction("quotes", "readwrite").objectStore("quotes").put(quote);
-    
+
     if (!editingQuoteId) {
         let seq = await loadSetting("seq", MIN_SEQ);
         await saveSetting("seq", Math.max(seq, MIN_SEQ) + 1);
     }
-    
+
     editingQuoteId = null;
     document.getElementById('btnCancelEdit').classList.add('hidden');
     document.getElementById('btnSave').innerHTML = '💾 Guardar y Generar PDF';
@@ -198,7 +328,7 @@ document.getElementById('btnCancelEdit').addEventListener('click', async () => {
     editingQuoteId = null;
     document.getElementById('btnCancelEdit').classList.add('hidden');
     document.getElementById('btnSave').innerHTML = '💾 Guardar y Generar PDF';
-    
+
     document.getElementById('clientName').value = '';
     document.getElementById('clientContact').value = '';
     document.getElementById('clientRut').value = '';
@@ -206,8 +336,10 @@ document.getElementById('btnCancelEdit').addEventListener('click', async () => {
     document.getElementById('clientCity').value = '';
     document.getElementById('clientPhone').value = '';
     document.getElementById('clientEmail').value = '';
+    document.getElementById('quoteStatus').value = 'Pendiente';
+
     lines = [];
-    addLine(); 
+    addLine();
     await updateNextQuoteCode();
 });
 
@@ -251,21 +383,22 @@ function drawPdfContent(doc, q, formatMoney, logo) {
     doc.setFontSize(9);
     doc.text("Cerro el plomo 5931 of 1213, Las Condes", 75, 20);
     doc.text("Región Metropolitana", 75, 25);
-doc.setFontSize(9);
-doc.setFont("helvetica", "bold");
-doc.text("COTIZACIÓN N°", 140, 15);    // 145 → 140
-doc.setFont("helvetica", "normal");
-doc.text(q.id, 170, 15);               // 180 → 170
 
-doc.setFont("helvetica", "bold");
-doc.text("FECHA", 140, 20);            // 145 → 140
-doc.setFont("helvetica", "normal");
-doc.text(q.date, 162, 20);             // 173 → 162
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("COTIZACIÓN N°", 140, 15);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.id, 170, 15);
 
-doc.setFont("helvetica", "bold");
-doc.text("VÁLIDO HASTA", 140, 25);     // 145 → 140
-doc.setFont("helvetica", "normal");
-doc.text(q.validDate || q.date, 170, 25);  // 177 → 170
+    doc.setFont("helvetica", "bold");
+    doc.text("FECHA", 140, 20);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.date, 162, 20);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("VÁLIDO HASTA", 140, 25);
+    doc.setFont("helvetica", "normal");
+    doc.text(q.validDate || q.date, 170, 25);
 
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
@@ -327,13 +460,13 @@ doc.text(q.validDate || q.date, 170, 25);  // 177 → 170
     doc.setDrawColor(200, 200, 200);
     doc.line(14, 90, 196, 90);
 
-    const rate = parseFloat(q.rate) || 1;
     let subtotalPDF = 0;
 
     const tableData = q.lines.map(l => {
         let costoBase = q.currency === 'USD' ? l.cost : l.cost;
         let divisor = 1 - (l.margin / 100);
         if (divisor <= 0) divisor = 0.01;
+
         let pVenta = costoBase / divisor;
         let totalLinea = pVenta * l.qty;
         subtotalPDF += totalLinea;
@@ -361,25 +494,25 @@ doc.text(q.validDate || q.date, 170, 25);  // 177 → 170
         ]],
         body: tableData,
         theme: 'striped',
-        headStyles: { 
+        headStyles: {
             fillColor: [27, 43, 65],
             textColor: [255, 255, 255],
             fontStyle: 'bold',
             halign: 'center',
             fontSize: 8
         },
-        bodyStyles: { 
-            textColor: [0,0,0],
+        bodyStyles: {
+            textColor: [0, 0, 0],
             cellPadding: 3,
             fontSize: 8
         },
         alternateRowStyles: { fillColor: [245, 245, 245] },
         columnStyles: {
             0: { halign: 'center', cellWidth: 20 },
-            1: { halign: 'left',   cellWidth: 80 },
+            1: { halign: 'left', cellWidth: 80 },
             2: { halign: 'center', cellWidth: 35 },
             3: { halign: 'center', cellWidth: 20 },
-            4: { halign: 'right',  cellWidth: 30 }
+            4: { halign: 'right', cellWidth: 30 }
         }
     });
 
@@ -411,7 +544,7 @@ doc.text(q.validDate || q.date, 170, 25);  // 177 → 170
     doc.text("OBS:", 14, finalY + 25);
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
-    doc.text(doc.splitTextToSize(q.notes, 100), 25, finalY + 25);
+    doc.text(doc.splitTextToSize(q.notes || '', 100), 25, finalY + 25);
 
     let textY = finalY + 100;
     doc.setFontSize(9);
@@ -437,51 +570,53 @@ doc.text(q.validDate || q.date, 170, 25);  // 177 → 170
 window.editQuoteHistory = function(id) {
     db.transaction("quotes").objectStore("quotes").get(id).onsuccess = (e) => {
         const q = e.target.result;
-        if(q) {
-            document.getElementById('historyView').classList.add('hidden');
-            document.getElementById('newQuoteView').classList.remove('hidden');
-            
-            document.getElementById('quoteNumber').innerText = q.id;
-            document.getElementById('clientName').value = q.client || '';
-            document.getElementById('clientContact').value = q.contact || '';
-            document.getElementById('clientRut').value = q.rut || '';
-            document.getElementById('clientAddress').value = q.address || '';
-            document.getElementById('clientCity').value = q.city || '';
-            document.getElementById('clientPhone').value = q.phone || '';
-            document.getElementById('clientEmail').value = q.email || '';
-            document.getElementById('quoteStatus').value = q.status || 'Pendiente';
-            document.getElementById('notes').value = q.notes || '';
-            document.getElementById('currency').value = q.currency || 'CLP';
-            document.getElementById('exchangeRate').value = q.rate || 950;
-            
-            lines = [...q.lines];
-            renderLines();
-            
-            editingQuoteId = q.id;
-            document.getElementById('btnCancelEdit').classList.remove('hidden');
-            document.getElementById('btnSave').innerHTML = '💾 Actualizar Cotización y PDF';
-        }
+        if (!q) return;
+
+        document.getElementById('historyView').classList.add('hidden');
+        document.getElementById('newQuoteView').classList.remove('hidden');
+
+        document.getElementById('quoteNumber').innerText = q.id;
+        document.getElementById('clientName').value = q.client || '';
+        document.getElementById('clientContact').value = q.contact || '';
+        document.getElementById('clientRut').value = q.rut || '';
+        document.getElementById('clientAddress').value = q.address || '';
+        document.getElementById('clientCity').value = q.city || '';
+        document.getElementById('clientPhone').value = q.phone || '';
+        document.getElementById('clientEmail').value = q.email || '';
+        document.getElementById('quoteStatus').value = q.status || 'Pendiente';
+        document.getElementById('notes').value = q.notes || '';
+        document.getElementById('currency').value = q.currency || 'CLP';
+        document.getElementById('exchangeRate').value = q.rate || 950;
+
+        lines = [...q.lines];
+        renderLines();
+
+        editingQuoteId = q.id;
+        document.getElementById('btnCancelEdit').classList.remove('hidden');
+        document.getElementById('btnSave').innerHTML = '💾 Actualizar Cotización y PDF';
     };
 };
 
 document.getElementById('btnViewHistory').addEventListener('click', () => {
     document.getElementById('newQuoteView').classList.add('hidden');
     document.getElementById('historyView').classList.remove('hidden');
+
     db.transaction("quotes").objectStore("quotes").getAll().onsuccess = (e) => {
         document.getElementById('historyBody').innerHTML = e.target.result
-            .sort((a,b) => a.id < b.id ? 1 : -1)
+            .sort((a, b) => a.id < b.id ? 1 : -1)
             .map(q => `
-            <tr class="border-b text-center">
-                <td class="p-2 font-bold text-gray-700">${q.id}</td>
-                <td class="p-2">${q.date}</td>
-                <td class="p-2 text-left">${q.client}</td>
-                <td class="p-2">${q.total.toLocaleString('es-CL')}</td>
-                <td class="p-2">${q.status}</td>
-                <td class="p-2 flex justify-center gap-2">
-                    <button onclick="editQuoteHistory('${q.id}')" class="text-green-600 hover:underline font-bold">✏️ Editar</button>
-                    <button onclick="downloadPdfHistory('${q.id}')" class="text-blue-500 hover:underline">PDF</button>
-                </td>
-            </tr>`).join('');
+                <tr class="border-b text-center">
+                    <td class="p-2 font-bold text-gray-700">${q.id}</td>
+                    <td class="p-2">${q.date}</td>
+                    <td class="p-2 text-left">${q.client}</td>
+                    <td class="p-2">${formatCLP(q.total)}</td>
+                    <td class="p-2">${q.status}</td>
+                    <td class="p-2 flex justify-center gap-2">
+                        <button onclick="editQuoteHistory('${q.id}')" class="text-green-600 hover:underline font-bold">✏️ Editar</button>
+                        <button onclick="downloadPdfHistory('${q.id}')" class="text-blue-500 hover:underline">PDF</button>
+                    </td>
+                </tr>
+            `).join('');
     };
 });
 
@@ -492,22 +627,24 @@ document.getElementById('btnBackToNew').addEventListener('click', () => {
 
 window.downloadPdfHistory = function(id) {
     db.transaction("quotes").objectStore("quotes").get(id).onsuccess = (e) => {
-        if(e.target.result) generatePDF(e.target.result);
+        if (e.target.result) generatePDF(e.target.result);
     };
 };
 
 // Ajustar correlativo manualmente
 document.getElementById('btnSetSeq').addEventListener('click', async () => {
     let currentSeq = await loadSetting("seq", MIN_SEQ);
+
     let newSeq = prompt(
         `El número actual interno es: ${currentSeq}.\n\n` +
         `Si tu PC va en la 407, escribe 408 aquí para que el iPad no choque:\n` +
         `¿Desde qué número quieres continuar?`,
         currentSeq
     );
-    
+
     if (newSeq !== null && !isNaN(newSeq) && newSeq !== "") {
         newSeq = parseInt(newSeq);
+
         if (newSeq >= 1) {
             await saveSetting("seq", newSeq);
             await updateNextQuoteCode();
@@ -522,16 +659,24 @@ document.getElementById('btnSetSeq').addEventListener('click', async () => {
 document.getElementById('btnSync').addEventListener('click', () => {
     db.transaction("quotes").objectStore("quotes").getAll().onsuccess = async (e) => {
         const unSynced = e.target.result.filter(q => !q.synced);
-        if(unSynced.length === 0) return alert("Todo sincronizado.");
+
+        if (unSynced.length === 0) {
+            return alert("Todo sincronizado.");
+        }
+
         try {
             const res = await fetch('http://localhost:8787/api/push', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(unSynced)
             });
-            if(res.ok) {
+
+            if (res.ok) {
                 const txWrite = db.transaction("quotes", "readwrite");
-                unSynced.forEach(q => { q.synced = true; txWrite.objectStore("quotes").put(q); });
+                unSynced.forEach(q => {
+                    q.synced = true;
+                    txWrite.objectStore("quotes").put(q);
+                });
                 alert("¡Sincronizado con PC exitosamente!");
             }
         } catch {
