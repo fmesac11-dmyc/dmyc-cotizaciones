@@ -88,7 +88,6 @@ function calculateTotals() {
     return { subtotal, iva, total, totalUtilidad };
 }
 
-// Genera COT-XXXX-CLIE
 async function updateNextQuoteCode() {
     if (editingQuoteId) return;
 
@@ -132,8 +131,13 @@ window.updateLine = function(id, field, value) {
 
 window.removeLine = function(id) {
     lines = lines.filter(l => l.id !== id);
-    if (lines.length === 0) addLine();
-    else renderLines();
+
+    if (lines.length === 0) {
+        addLine();
+        return;
+    }
+
+    renderLines();
 };
 
 function renderLines() {
@@ -206,10 +210,15 @@ function renderLines() {
 
     const totals = calculateTotals();
 
-    document.getElementById('utilityText').innerText = formatCLP(totals.totalUtilidad);
-    document.getElementById('subtotalText').innerText = formatCLP(totals.subtotal);
-    document.getElementById('ivaText').innerText = formatCLP(totals.iva);
-    document.getElementById('totalText').innerText = formatCLP(totals.total);
+    const utilityEl = document.getElementById('utilityText');
+    const subtotalEl = document.getElementById('subtotalText');
+    const ivaEl = document.getElementById('ivaText');
+    const totalEl = document.getElementById('totalText');
+
+    if (utilityEl) utilityEl.innerText = formatCLP(totals.totalUtilidad);
+    if (subtotalEl) subtotalEl.innerText = formatCLP(totals.subtotal);
+    if (ivaEl) ivaEl.innerText = formatCLP(totals.iva);
+    if (totalEl) totalEl.innerText = formatCLP(totals.total);
 }
 
 document.getElementById('btnAddLine').addEventListener('click', () => addLine());
@@ -219,7 +228,6 @@ document.getElementById('exchangeRate').addEventListener('input', (e) => {
     renderLines();
 });
 
-// Excel masivo
 document.getElementById('btnBulkUpload').addEventListener('click', () => {
     document.getElementById('bulkUpload').click();
 });
@@ -266,7 +274,6 @@ document.getElementById('bulkUpload').addEventListener('change', function(e) {
     reader.readAsArrayBuffer(file);
 });
 
-// Guardar y PDF
 document.getElementById('btnSave').addEventListener('click', async () => {
     const qNum = document.getElementById('quoteNumber').innerText;
     const client = document.getElementById('clientName').value.trim();
@@ -343,7 +350,6 @@ document.getElementById('btnCancelEdit').addEventListener('click', async () => {
     await updateNextQuoteCode();
 });
 
-// PDF con logo y formato DMYC
 function generatePDF(q) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
@@ -566,7 +572,6 @@ function drawPdfContent(doc, q, formatMoney, logo) {
     doc.save(`${q.id}.pdf`);
 }
 
-// Historial
 window.editQuoteHistory = function(id) {
     db.transaction("quotes").objectStore("quotes").get(id).onsuccess = (e) => {
         const q = e.target.result;
@@ -631,7 +636,6 @@ window.downloadPdfHistory = function(id) {
     };
 };
 
-// Ajustar correlativo manualmente
 document.getElementById('btnSetSeq').addEventListener('click', async () => {
     let currentSeq = await loadSetting("seq", MIN_SEQ);
 
@@ -655,7 +659,6 @@ document.getElementById('btnSetSeq').addEventListener('click', async () => {
     }
 });
 
-// Sync con PC
 document.getElementById('btnSync').addEventListener('click', () => {
     db.transaction("quotes").objectStore("quotes").getAll().onsuccess = async (e) => {
         const unSynced = e.target.result.filter(q => !q.synced);
