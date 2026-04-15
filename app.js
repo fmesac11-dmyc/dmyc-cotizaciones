@@ -16,6 +16,7 @@ async function initApp() {
     await updateNextQuoteCode();
     const rate = await loadSetting('exchangeRate', 950);
     document.getElementById('exchangeRate').value = rate;
+    syncValidDaysToNotes();
     addLine();
 }
 
@@ -221,11 +222,13 @@ function renderLines() {
     if (totalEl) totalEl.innerText = formatCLP(totals.total);
 }
 
-document.getElementById('validDays').addEventListener('input', (e) => {
-    const days = parseInt(e.target.value) || 5;
+function syncValidDaysToNotes() {
+    const days = parseInt(document.getElementById('validDays').value) || 5;
     const notes = document.getElementById('notes');
     notes.value = notes.value.replace(/Validez de la oferta: \d+ días\./, `Validez de la oferta: ${days} días.`);
-});
+}
+
+document.getElementById('validDays').addEventListener('input', syncValidDaysToNotes);
 
 document.getElementById('btnAddLine').addEventListener('click', () => addLine());
 document.getElementById('currency').addEventListener('change', renderLines);
