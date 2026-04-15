@@ -221,6 +221,12 @@ function renderLines() {
     if (totalEl) totalEl.innerText = formatCLP(totals.total);
 }
 
+document.getElementById('validDays').addEventListener('input', (e) => {
+    const days = parseInt(e.target.value) || 5;
+    const notes = document.getElementById('notes');
+    notes.value = notes.value.replace(/Validez de la oferta: \d+ días\./, `Validez de la oferta: ${days} días.`);
+});
+
 document.getElementById('btnAddLine').addEventListener('click', () => addLine());
 document.getElementById('currency').addEventListener('change', renderLines);
 document.getElementById('exchangeRate').addEventListener('input', (e) => {
@@ -305,6 +311,7 @@ document.getElementById('btnSave').addEventListener('click', async () => {
         phone: document.getElementById('clientPhone').value,
         email: document.getElementById('clientEmail').value,
         status: document.getElementById('quoteStatus').value,
+        deliveryTime: document.getElementById('deliveryTime').value,
         notes: document.getElementById('notes').value,
         currency: document.getElementById('currency').value,
         rate: document.getElementById('exchangeRate').value,
@@ -343,6 +350,7 @@ document.getElementById('btnCancelEdit').addEventListener('click', async () => {
     document.getElementById('clientCity').value = '';
     document.getElementById('clientPhone').value = '';
     document.getElementById('clientEmail').value = '';
+    document.getElementById('deliveryTime').value = '';
     document.getElementById('quoteStatus').value = 'Pendiente';
 
     lines = [];
@@ -552,6 +560,15 @@ function drawPdfContent(doc, q, formatMoney, logo) {
     doc.setFont("helvetica", "normal");
     doc.text(doc.splitTextToSize(q.notes || '', 100), 25, finalY + 25);
 
+    if (q.deliveryTime) {
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(27, 43, 65);
+        doc.text("PLAZO DE ENTREGA:", 14, finalY + 45);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(0, 0, 0);
+        doc.text(q.deliveryTime, 65, finalY + 45);
+    }
+
     let textY = finalY + 100;
     doc.setFontSize(9);
     doc.text("Si tiene cualquier tipo de pregunta acerca de esta oferta, póngase en contacto", 105, textY, { align: "center" });
@@ -588,6 +605,7 @@ window.editQuoteHistory = function(id) {
         document.getElementById('clientCity').value = q.city || '';
         document.getElementById('clientPhone').value = q.phone || '';
         document.getElementById('clientEmail').value = q.email || '';
+        document.getElementById('deliveryTime').value = q.deliveryTime || '';
         document.getElementById('quoteStatus').value = q.status || 'Pendiente';
         document.getElementById('notes').value = q.notes || '';
         document.getElementById('currency').value = q.currency || 'CLP';
@@ -602,28 +620,60 @@ window.editQuoteHistory = function(id) {
     };
 };
 
+function statusBadge(status) {
+    const colors = {
+        'Pendiente': 'bg-yellow-100 text-yellow-800',
+        'Ganado': 'bg-green-100 text-green-800',
+        'Perdido': 'bg-red-100 text-red-800'
+    };
+    return `<span class="px-2 py-1 rounded text-xs font-bold ${colors[status] || 'bg-gray-100 text-gray-700'}">${status}</span>`;
+}
+
+let allQuotes = [];
+
+function renderHistory() {
+    const clientFilter = document.getElementById('filterClient').value.toLowerCase();
+    const statusFilter = document.getElementById('filterStatus').value;
+
+    const filtered = allQuotes.filter(q => {
+        const matchClient = !clientFilter || q.client.toLowerCase().includes(clientFilter);
+        const matchStatus = !statusFilter || q.status === statusFilter;
+        return matchClient && matchStatus;
+    });
+
+    document.getElementById('historyBody').innerHTML = filtered.length === 0
+        ? `<tr><td colspan="6" class="p-4 text-center text-gray-400">Sin resultados.</td></tr>`
+        : filtered.map(q => `
+            <tr class="border-b text-center">
+                <td class="p-2 font-bold text-gray-700">${q.id}</td>
+                <td class="p-2">${q.date}</td>
+                <td class="p-2 text-left">${q.client}</td>
+                <td class="p-2">${formatCLP(q.total)}</td>
+                <td class="p-2">${statusBadge(q.status)}</td>
+                <td class="p-2">
+                    <div class="flex justify-center gap-2 flex-wrap">
+                        <button onclick="editQuoteHistory('${q.id}')" class="text-green-600 hover:underline font-bold text-sm">✏️ Editar</button>
+                        <button onclick="duplicateQuote('${q.id}')" class="text-purple-600 hover:underline font-bold text-sm">📋 Duplicar</button>
+                        <button onclick="downloadPdfHistory('${q.id}')" class="text-blue-500 hover:underline text-sm">📄 PDF</button>
+                        <button onclick="deleteQuote('${q.id}')" class="text-red-500 hover:underline text-sm">🗑️ Eliminar</button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+}
+
 document.getElementById('btnViewHistory').addEventListener('click', () => {
     document.getElementById('newQuoteView').classList.add('hidden');
     document.getElementById('historyView').classList.remove('hidden');
 
     db.transaction("quotes").objectStore("quotes").getAll().onsuccess = (e) => {
-        document.getElementById('historyBody').innerHTML = e.target.result
-            .sort((a, b) => a.id < b.id ? 1 : -1)
-            .map(q => `
-                <tr class="border-b text-center">
-                    <td class="p-2 font-bold text-gray-700">${q.id}</td>
-                    <td class="p-2">${q.date}</td>
-                    <td class="p-2 text-left">${q.client}</td>
-                    <td class="p-2">${formatCLP(q.total)}</td>
-                    <td class="p-2">${q.status}</td>
-                    <td class="p-2 flex justify-center gap-2">
-                        <button onclick="editQuoteHistory('${q.id}')" class="text-green-600 hover:underline font-bold">✏️ Editar</button>
-                        <button onclick="downloadPdfHistory('${q.id}')" class="text-blue-500 hover:underline">PDF</button>
-                    </td>
-                </tr>
-            `).join('');
+        allQuotes = e.target.result.sort((a, b) => a.id < b.id ? 1 : -1);
+        renderHistory();
     };
 });
+
+document.getElementById('filterClient').addEventListener('input', renderHistory);
+document.getElementById('filterStatus').addEventListener('change', renderHistory);
 
 document.getElementById('btnBackToNew').addEventListener('click', () => {
     document.getElementById('historyView').classList.add('hidden');
@@ -633,6 +683,45 @@ document.getElementById('btnBackToNew').addEventListener('click', () => {
 window.downloadPdfHistory = function(id) {
     db.transaction("quotes").objectStore("quotes").get(id).onsuccess = (e) => {
         if (e.target.result) generatePDF(e.target.result);
+    };
+};
+
+window.deleteQuote = function(id) {
+    if (!confirm(`¿Eliminar la cotización ${id}? Esta acción no se puede deshacer.`)) return;
+    db.transaction("quotes", "readwrite").objectStore("quotes").delete(id).onsuccess = () => {
+        allQuotes = allQuotes.filter(q => q.id !== id);
+        renderHistory();
+    };
+};
+
+window.duplicateQuote = async function(id) {
+    db.transaction("quotes").objectStore("quotes").get(id).onsuccess = async (e) => {
+        const original = e.target.result;
+        if (!original) return;
+
+        document.getElementById('historyView').classList.add('hidden');
+        document.getElementById('newQuoteView').classList.remove('hidden');
+
+        document.getElementById('clientName').value = original.client || '';
+        document.getElementById('clientContact').value = original.contact || '';
+        document.getElementById('clientRut').value = original.rut || '';
+        document.getElementById('clientAddress').value = original.address || '';
+        document.getElementById('clientCity').value = original.city || '';
+        document.getElementById('clientPhone').value = original.phone || '';
+        document.getElementById('clientEmail').value = original.email || '';
+        document.getElementById('deliveryTime').value = original.deliveryTime || '';
+        document.getElementById('quoteStatus').value = 'Pendiente';
+        document.getElementById('notes').value = original.notes || '';
+        document.getElementById('currency').value = original.currency || 'CLP';
+        document.getElementById('exchangeRate').value = original.rate || 950;
+
+        lines = original.lines.map(l => ({ ...l, id: Date.now() + Math.random() }));
+        renderLines();
+
+        editingQuoteId = null;
+        document.getElementById('btnCancelEdit').classList.remove('hidden');
+        document.getElementById('btnSave').innerHTML = '💾 Guardar y Generar PDF';
+        await updateNextQuoteCode();
     };
 };
 
