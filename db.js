@@ -1,7 +1,13 @@
-const SUPABASE_URL = 'https://TU_PROYECTO.supabase.co';
-const SUPABASE_KEY = 'TU_ANON_KEY';
+const SUPABASE_URL = 'https://TU_PROYECTO.supabase.co'; // Reemplaza con tu URL real
+const SUPABASE_KEY = 'TU_ANON_KEY'; // Reemplaza con tu Key real
 
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Función agregada para evitar el error de importación en app.js
+export async function initDB() {
+  console.log("Sistema de cotizaciones inicializado con Supabase");
+  return supabase;
+}
 
 export async function getSession() {
   const { data } = await supabase.auth.getSession();
@@ -22,6 +28,7 @@ export async function signOut() {
 
 export async function saveQuote(quote) {
   const session = await getSession();
+  if (!session) throw new Error("No hay sesión activa");
   const userId = session.user.id;
 
   const { error: qErr } = await supabase.from('cotizaciones').upsert({
