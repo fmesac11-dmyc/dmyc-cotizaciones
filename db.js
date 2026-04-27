@@ -1,36 +1,36 @@
-const SUPABASE_URL = 'https://TU_PROYECTO.supabase.co'; // Reemplaza con tu URL real
-const SUPABASE_KEY = 'TU_ANON_KEY'; // Reemplaza con tu Key real
-
+const SUPABASE_URL = 'https://cuvayreprbjaredwival.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1dmF5cmVwcmJqYXJlZHdpdmFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyOTM4MjQsImV4cCI6MjA5Mjg2OTgyNH0.FL99GVU6NFHjMVR3Uz1C29sFmxONP7qQnZ9tCbyjhoc';
+ 
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
+ 
 // Función agregada para evitar el error de importación en app.js
 export async function initDB() {
   console.log("Sistema de cotizaciones inicializado con Supabase");
   return supabase;
 }
-
+ 
 export async function getSession() {
   const { data } = await supabase.auth.getSession();
   return data.session;
 }
-
+ 
 export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email, password });
 }
-
+ 
 export async function signUp(email, password) {
   return supabase.auth.signUp({ email, password });
 }
-
+ 
 export async function signOut() {
   return supabase.auth.signOut();
 }
-
+ 
 export async function saveQuote(quote) {
   const session = await getSession();
   if (!session) throw new Error("No hay sesión activa");
   const userId = session.user.id;
-
+ 
   const { error: qErr } = await supabase.from('cotizaciones').upsert({
     id: quote.id,
     user_id: userId,
@@ -54,11 +54,11 @@ export async function saveQuote(quote) {
     utility_total: quote.utilityTotal,
     updated_at: new Date().toISOString()
   });
-
+ 
   if (qErr) throw qErr;
-
+ 
   await supabase.from('items_cotizacion').delete().eq('cotizacion_id', quote.id);
-
+ 
   const items = quote.lines.map((l, i) => ({
     cotizacion_id: quote.id,
     desc_text: l.desc,
@@ -68,21 +68,21 @@ export async function saveQuote(quote) {
     margin: l.margin,
     orden: i
   }));
-
+ 
   if (items.length > 0) {
     const { error: iErr } = await supabase.from('items_cotizacion').insert(items);
     if (iErr) throw iErr;
   }
 }
-
+ 
 export async function getAllQuotes() {
   const { data, error } = await supabase
     .from('cotizaciones')
     .select('*, items_cotizacion(*)')
     .order('created_at', { ascending: false });
-
+ 
   if (error) throw error;
-
+ 
   return data.map(q => ({
     id: q.id,
     date: q.date,
@@ -108,16 +108,16 @@ export async function getAllQuotes() {
       .map(i => ({ id: i.id, desc: i.desc_text, qty: i.qty, unit: i.unit, cost: i.cost, margin: i.margin }))
   }));
 }
-
+ 
 export async function deleteQuote(id) {
   const { error } = await supabase.from('cotizaciones').delete().eq('id', id);
   if (error) throw error;
 }
-
+ 
 export async function saveSetting(key, value) {
   localStorage.setItem(`dmyc_${key}`, JSON.stringify(value));
 }
-
+ 
 export async function loadSetting(key, defaultVal) {
   const stored = localStorage.getItem(`dmyc_${key}`);
   return stored !== null ? JSON.parse(stored) : defaultVal;
